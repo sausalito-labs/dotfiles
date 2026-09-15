@@ -330,7 +330,7 @@ phase2() {
 
     if [[ ! -f "$FLAKE_DIR/flake.lock" ]]; then
         echo "==> Locking flake inputs..."
-        nix --extra-experimental-features "nix-command flakes" flake lock "$FLAKE_DIR"
+        nix-shell -p git --run "nix --extra-experimental-features 'nix-command flakes' flake lock $FLAKE_DIR"
     else
         echo "==> flake.lock already exists."
     fi
