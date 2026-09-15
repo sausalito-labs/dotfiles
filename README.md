@@ -1,6 +1,7 @@
 # dotfiles
 
-Declarative system configuration, organized by environment.
+Declarative system configuration. Currently contains the NixOS flake for
+`agent-box`, a remote Linux server (VPS/VM) that runs OpenCode and Tailscale.
 
 - `agent-box/` — NixOS config for an agent box (OpenCode, Tailscale/Headscale,
   SSH, agent workflows).

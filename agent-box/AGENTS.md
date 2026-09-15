@@ -3,6 +3,10 @@
 You are running on the **agent box**, a NixOS system designed for experimenting
 with tools and workflows without polluting the base system.
 
+This is a NixOS server configuration. It is not a desktop environment, not
+macOS/Windows/WSL, and not a Docker or container host. Do not install tools
+globally by default; use workflows instead.
+
 ## Base system tools
 
 The following are always available without entering a workflow:
@@ -13,6 +17,13 @@ The following are always available without entering a workflow:
 - `htop` — process viewer
 - `python3`, `openssl` — scripting and crypto utilities
 - `opencode` — this agent
+
+## When asked to install a tool
+
+1. If a relevant workflow already exists, edit that workflow's `flake.nix`.
+2. Otherwise, create a new workflow with `new-workflow.sh <name> [template]`.
+3. Never install a tool globally with `nix-env` or edit the base NixOS config
+   unless the user explicitly asks.
 
 ## Workflows
 
@@ -66,13 +77,14 @@ When you need a new tool:
    enter-workflow.sh <name>
    ```
 
-5. Commit the workflow locally so Nix can see it:
+5. Commit the workflow locally if you want it backed up:
    ```bash
    git -C /etc/nixos/dotfiles add agent-box/workflows/<name>
    git -C /etc/nixos/dotfiles commit -m "add <tool> to <name> workflow"
    ```
 
-   You do not need to push this commit to GitHub.
+   Nix does not require this commit for `nix develop` to work. You do not need
+   to push it to GitHub.
 
 ### Updating a template
 

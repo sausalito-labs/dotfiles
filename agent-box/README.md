@@ -6,6 +6,22 @@ NixOS flake for an agent box with workflows.
 > disk**. Only run it on a machine you are willing to erase (a fresh VPS or a
 > throwaway VM). It is **not** for macOS, Windows, or your main machine.
 
+## What this is and what it isn't
+
+**This is:**
+- A NixOS flake for a remote Linux server (VPS or VM).
+- A stable base system with OpenCode, SSH, Tailscale, and a firewall.
+- A set of per-project development environments called **workflows**.
+- A one-script installer for a fresh disk via `nixos-infect`.
+
+**This is not:**
+- A macOS, Windows, or WSL setup.
+- A desktop environment or daily driver.
+- A system where packages are installed globally by default.
+- A Docker, Kubernetes, or container platform.
+- A CI/CD runner, game engine, or game itself.
+- A project that requires pushing VPS changes to GitHub.
+
 ## How it works
 
 The agent box keeps a small, stable base system and puts all project-specific
@@ -39,11 +55,20 @@ exit
 enter-workflow.sh game
 ```
 
-If it does not work, throw it away:
+If it does not work, throw it away.
+
+If you were testing inside an existing workflow, the temporary package is gone
+as soon as you exit:
 
 ```bash
 exit
-# only needed if you created a new workflow first
+nix-collect-garbage -d
+```
+
+If you created a brand-new workflow for the experiment, delete the workflow too:
+
+```bash
+exit
 purge-workflow.sh assets
 nix-collect-garbage -d
 ```
@@ -67,9 +92,10 @@ This copies `workflows/template/` to `workflows/assets/`.
 
 ### Note on local commits
 
-The installer creates a `hardware-configuration.nix` and may create workflows on
-the VPS. These live inside `/etc/nixos/dotfiles/` and are committed **locally** so
-Nix flakes can see them. You do **not** need to push them to GitHub.
+The installer creates a `hardware-configuration.nix` and commits it **locally**
+so the NixOS flake can import it. Workflows created later can also be committed
+locally, but that is only for backup — `nix develop` works on uncommitted
+workflow files. You do **not** need to push anything to GitHub.
 
 ## Bootstrap a fresh VPS
 
@@ -147,8 +173,9 @@ purge-workflow.sh my-webpage
 ```
 
 Edit `/etc/nixos/dotfiles/agent-box/workflows/<name>/flake.nix` to add packages.
-Changes are stored under `/etc/nixos/dotfiles/agent-box/workflows/` and committed
-locally so the flake can use them.
+Changes are stored under `/etc/nixos/dotfiles/agent-box/workflows/`. Commit them
+locally if you want them backed up; they do not need to be committed for
+`nix develop` to work.
 
 ## Structure
 

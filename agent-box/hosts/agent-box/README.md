@@ -81,5 +81,6 @@ To move to a different VPS, create a new directory under `hosts/`, import
 
 Create new workflows under `/etc/nixos/dotfiles/agent-box/workflows/` using
 `new-workflow.sh`. Each workflow is a flake that can declare its own packages.
-Workflow files live in the flake directory and are committed locally so Nix can
-see them; you do not need to push them to origin.
+Workflow files live in the flake directory. Commit them locally if you want them
+backed up; Nix does not require them to be committed. You do not need to push
+them to origin.
