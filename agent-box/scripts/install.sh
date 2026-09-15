@@ -30,6 +30,13 @@ get_ip() {
     hostname -I 2>/dev/null | awk '{print $1}' || echo "<your-server-ip>"
 }
 
+get_latest_stable_channel() {
+    curl -s https://channels.nixos.org/ \
+        | grep -oE 'nixos-[0-9]+\.[0-9]+' \
+        | sort -V -u \
+        | tail -1
+}
+
 persist_script() {
     if [[ -f "$0" && "$0" != "/dev/stdin" && "$0" != "bash" && "$0" != "-bash" ]]; then
         cp "$0" "$SCRIPT_PATH"
@@ -77,9 +84,11 @@ phase1() {
         return
     fi
 
+    NIX_CHANNEL="${NIX_CHANNEL:-$(get_latest_stable_channel)}"
+    echo "==> Using NixOS channel: $NIX_CHANNEL"
     echo "==> Running nixos-infect..."
     curl https://raw.githubusercontent.com/elitak/nixos-infect/master/nixos-infect \
-        | NIX_CHANNEL=nixos-24.11 bash -x 2>&1 | tee /tmp/nixos-infect.log
+        | NIX_CHANNEL="$NIX_CHANNEL" bash -x 2>&1 | tee /tmp/nixos-infect.log
 
     echo "==> Persisting installer for phase 2..."
     persist_script
