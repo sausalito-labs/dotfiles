@@ -96,10 +96,13 @@ get_os_id() {
 }
 
 get_latest_stable_channel() {
-    curl -s https://channels.nixos.org/ \
+    # Try to detect the latest stable NixOS channel from the public S3 bucket.
+    # If this fails or returns nothing, leave NIX_CHANNEL blank so nixos-infect
+    # uses its own default.
+    curl -fsSL "https://nix-channels.s3.amazonaws.com/" 2>/dev/null \
         | grep -oE 'nixos-[0-9]+\.[0-9]+' \
         | sort -V -u \
-        | tail -1
+        | tail -1 || true
 }
 
 persist_script() {
@@ -222,8 +225,11 @@ print_plan() {
         return
     fi
 
+    local detected_channel
+    detected_channel="$(get_latest_stable_channel)"
+
     echo "Plan:"
-    echo "  - run nixos-infect with NIX_CHANNEL=$(get_latest_stable_channel)"
+    echo "  - run nixos-infect with NIX_CHANNEL=${detected_channel:-<nixos-infect default>}"
     echo "  - reboot"
     echo "  - on next root login, automatically:"
     echo "      - clone $REPO_URL to $REPO_DIR"
@@ -266,7 +272,7 @@ phase1() {
     fi
 
     NIX_CHANNEL="${NIX_CHANNEL:-$(get_latest_stable_channel)}"
-    echo "==> Using NixOS channel: $NIX_CHANNEL"
+    echo "==> Using NixOS channel: ${NIX_CHANNEL:-<nixos-infect default>}"
     echo "==> Running nixos-infect..."
     curl https://raw.githubusercontent.com/elitak/nixos-infect/master/nixos-infect \
         | NIX_CHANNEL="$NIX_CHANNEL" bash -x 2>&1 | tee /tmp/nixos-infect.log
