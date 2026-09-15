@@ -1,16 +1,25 @@
 #!/usr/bin/env bash
 # One-script installer for the agent box.
 #
-# Run this as root on a fresh Debian/Ubuntu VPS. It will:
-#   1. Install NixOS via nixos-infect (if not already on NixOS).
-#   2. After reboot, clone this repo and build the agent box config.
-#   3. Run interactive setup (password, secrets).
-#   4. Disable root SSH and rebuild.
+# This installer will:
+#   - If not on NixOS: wipe the disk, install NixOS via nixos-infect, reboot,
+#     then continue automatically.
+#   - If already on NixOS: clone this repo, build the agent box config, run
+#     interactive setup, and disable root SSH.
+#
+# WARNING: The nixos-infect phase wipes the entire disk. Only run this on a
+# machine you are willing to erase (e.g., a fresh VPS or a throwaway VM).
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/sausalito-labs/dotfiles/master/agent-box/scripts/install.sh | bash
-# Or, after downloading:
-#   ./install.sh
+#
+# Options:
+#   --yes        Skip the confirmation prompt.
+#   --dry-run    Print what would happen and exit without changing anything.
+#
+# Environment variables:
+#   NIX_CHANNEL  e.g. nixos-24.11 (defaults to latest stable from channels.nixos.org)
+#   AUTO_YES=1   Same as --yes
 
 set -euo pipefail
 
@@ -22,12 +31,68 @@ HOST_DIR="/etc/nixos/dotfiles/agent-box/hosts/agent-box"
 SCRIPT_PATH="/root/agent-box-install.sh"
 BASH_PROFILE="/root/.bash_profile"
 
+DRY_RUN=0
+AUTO_YES="${AUTO_YES:-0}"
+
+usage() {
+    cat <<EOF
+Usage: $0 [OPTIONS] [phase2]
+
+Options:
+  --dry-run    Print the plan and exit without making changes.
+  --yes        Skip the confirmation prompt before nixos-infect.
+  -h, --help   Show this help message.
+
+Environment:
+  NIX_CHANNEL  NixOS channel for nixos-infect (default: latest stable).
+  AUTO_YES=1   Same as --yes.
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# Argument parsing
+# ---------------------------------------------------------------------------
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dry-run)
+            DRY_RUN=1
+            shift
+            ;;
+        --yes)
+            AUTO_YES=1
+            shift
+            ;;
+        phase2)
+            phase2
+            exit 0
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            echo "Usage: $0 [--dry-run] [--yes] [phase2]" >&2
+            exit 1
+            ;;
+    esac
+done
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 is_nixos() {
     [[ -f /etc/NIXOS ]]
 }
 
 get_ip() {
     hostname -I 2>/dev/null | awk '{print $1}' || echo "<your-server-ip>"
+}
+
+get_os_id() {
+    if [[ -f /etc/os-release ]]; then
+        grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"'
+    fi
 }
 
 get_latest_stable_channel() {
@@ -72,6 +137,98 @@ disable_root_ssh() {
     fi
 }
 
+# ---------------------------------------------------------------------------
+# OS / safety checks
+# ---------------------------------------------------------------------------
+check_can_infect() {
+    local os_kernel
+    os_kernel="$(uname -s)"
+
+    if [[ "$os_kernel" != "Linux" ]]; then
+        echo "ERROR: nixos-infect requires Linux. Detected: $os_kernel" >&2
+        echo "If you already have NixOS installed, run this script there and it will skip nixos-infect." >&2
+        echo "Otherwise, run this on a fresh Debian/Ubuntu VPS or inside a Linux VM." >&2
+        return 1
+    fi
+
+    local os_id
+    os_id="$(get_os_id)"
+    case "$os_id" in
+        debian|ubuntu)
+            return 0
+            ;;
+        *)
+            echo "ERROR: This installer uses nixos-infect, which only supports Debian/Ubuntu for unattended installs." >&2
+            echo "Detected OS: ${os_id:-unknown}" >&2
+            echo "If you already have NixOS installed, run this script there and it will skip nixos-infect." >&2
+            return 1
+            ;;
+    esac
+}
+
+confirm_infect() {
+    if [[ "$AUTO_YES" == "1" ]]; then
+        return 0
+    fi
+
+    cat <<EOF
+
+WARNING: This will wipe the entire disk on $(hostname) and install NixOS.
+This is intended for a fresh VPS or throwaway VM, NOT your laptop or main machine.
+EOF
+    local answer=""
+    read -rp "Continue? [y/N] " answer </dev/tty || true
+    [[ "$answer" =~ ^[Yy]$ ]]
+}
+
+print_plan() {
+    echo "Detected kernel: $(uname -s)"
+    echo "NixOS: $(is_nixos && echo yes || echo no)"
+    echo
+
+    if is_nixos; then
+        echo "Plan:"
+        echo "  - skip nixos-infect (already on NixOS)"
+        echo "  - clone $REPO_URL to $REPO_DIR"
+        echo "  - generate $HOST_DIR/hardware-configuration.nix"
+        echo "  - run nixos-rebuild switch --flake $FLAKE_DIR#agent-box"
+        echo "  - run interactive setup (password, secrets)"
+        echo "  - disable root SSH and rebuild"
+        echo "  - print: ssh agent@$(get_ip)"
+        return
+    fi
+
+    if [[ "$(uname -s)" != "Linux" ]]; then
+        echo "Plan:"
+        echo "  - exit: nixos-infect requires Linux"
+        echo "  - if you install NixOS first, re-run this script to bootstrap the agent box"
+        return
+    fi
+
+    local os_id
+    os_id="$(get_os_id)"
+    if [[ "$os_id" != "debian" && "$os_id" != "ubuntu" ]]; then
+        echo "Plan:"
+        echo "  - exit: nixos-infect only supports Debian/Ubuntu (detected: ${os_id:-unknown})"
+        echo "  - if you install NixOS first, re-run this script to bootstrap the agent box"
+        return
+    fi
+
+    echo "Plan:"
+    echo "  - run nixos-infect with NIX_CHANNEL=$(get_latest_stable_channel)"
+    echo "  - reboot"
+    echo "  - on next root login, automatically:"
+    echo "      - clone $REPO_URL to $REPO_DIR"
+    echo "      - generate hardware configuration"
+    echo "      - run nixos-rebuild switch --flake $FLAKE_DIR#agent-box"
+    echo "      - run interactive setup"
+    echo "      - disable root SSH and rebuild"
+    echo "      - print: ssh agent@$(get_ip)"
+}
+
+# ---------------------------------------------------------------------------
+# Phases
+# ---------------------------------------------------------------------------
 phase1() {
     echo "============================================================"
     echo " Agent Box Installer - Phase 1: Install NixOS"
@@ -82,6 +239,21 @@ phase1() {
         echo "Already on NixOS. Skipping phase 1."
         phase2
         return
+    fi
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        echo "==> Dry run mode. Nothing will be changed."
+        print_plan
+        exit 0
+    fi
+
+    if ! check_can_infect; then
+        exit 1
+    fi
+
+    if ! confirm_infect; then
+        echo "Aborted."
+        exit 0
     fi
 
     NIX_CHANNEL="${NIX_CHANNEL:-$(get_latest_stable_channel)}"
@@ -156,11 +328,16 @@ phase2() {
     echo
 }
 
-case "${1:-}" in
-    phase2)
-        phase2
-        ;;
-    *)
-        phase1
-        ;;
-esac
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+if [[ "$DRY_RUN" == "1" ]]; then
+    print_plan
+    exit 0
+fi
+
+if is_nixos; then
+    phase2
+else
+    phase1
+fi
