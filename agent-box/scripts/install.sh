@@ -152,7 +152,10 @@ write_phase2_service() {
             root_cfg+=$'\n    openssh.authorizedKeys.keys = ['
             for key in "${root_keys[@]}"; do
                 [[ -n "$key" ]] || continue
-                root_cfg+=$'\n      "'"$key"$'";'
+                # Indented strings (''...'') let keys contain quotes/backslashes
+                # literally, same as nixos-infect uses. Only '' needs escaping.
+                key_esc=$(printf '%s' "$key" | tr -d '\r' | sed "s/''/'''/g")
+                root_cfg+=$'\n      '"''${key_esc}''"
             done
             root_cfg+=$'\n    ];'
         fi
@@ -188,6 +191,24 @@ $root_cfg
 }
 EOF
     echo "==> Wrote phase 2 systemd trigger to $PHASE2_NIX"
+
+    # Validate the generated module parses as Nix before nixos-infect wipes the
+    # disk. This catches quoting bugs in preserved keys/passwords early.
+    local nix_parse=""
+    if command -v nix-instantiate >/dev/null 2>&1; then
+        nix_parse="$(command -v nix-instantiate)"
+    elif [[ -x /nix/var/nix/profiles/default/bin/nix-instantiate ]]; then
+        nix_parse="/nix/var/nix/profiles/default/bin/nix-instantiate"
+    fi
+
+    if [[ -n "$nix_parse" ]]; then
+        if ! "$nix_parse" --parse "$PHASE2_NIX" >/dev/null 2>&1; then
+            echo "ERROR: generated phase 2 module failed Nix syntax check:" >&2
+            "$nix_parse" --parse "$PHASE2_NIX" >&2 || true
+            exit 1
+        fi
+        echo "==> Phase 2 module passes Nix syntax check"
+    fi
 }
 
 disable_root_ssh() {
