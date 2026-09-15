@@ -2,9 +2,8 @@
   description = "Vendor-agnostic NixOS configuration for a headless gamedev box";
 
   inputs = {
-    # Pin to unstable for the freshest Godot/Chromium packages.
-    # Change to github:NixOS/nixpkgs/nixos-24.11 if you prefer a stable release.
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    # Pin to the latest stable release for predictability.
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
   };
 
   outputs = { self, nixpkgs, ... }: {

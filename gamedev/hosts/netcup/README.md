@@ -34,7 +34,7 @@ To move to a different VPS, create a new directory under `hosts/`, import
      without uploading an ISO:
       ```bash
       curl https://raw.githubusercontent.com/elitak/nixos-infect/master/nixos-infect \
-        | NIX_CHANNEL=nixos-unstable bash -x 2>&1 | tee /tmp/nixos-infect.log
+        | NIX_CHANNEL=nixos-24.11 bash -x 2>&1 | tee /tmp/nixos-infect.log
       ```
      Wait for the reboot, then SSH back in as `root`.
    - **Alternative:** boot the NixOS minimal ISO via SCP's *Media → DVD Drive*,

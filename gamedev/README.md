@@ -13,7 +13,7 @@ NixOS flake for a headless gamedev box.
    This wipes the disk and installs NixOS:
    ```bash
    curl https://raw.githubusercontent.com/elitak/nixos-infect/master/nixos-infect \
-     | NIX_CHANNEL=nixos-unstable bash -x 2>&1 | tee /tmp/nixos-infect.log
+     | NIX_CHANNEL=nixos-24.11 bash -x 2>&1 | tee /tmp/nixos-infect.log
    ```
    Wait for the reboot.
 
