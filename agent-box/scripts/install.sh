@@ -127,6 +127,13 @@ remove_phase2_hook() {
     fi
 }
 
+ensure_git_identity() {
+    if [[ -d "$REPO_DIR/.git" ]]; then
+        git -C "$REPO_DIR" config user.email >/dev/null 2>&1 || git -C "$REPO_DIR" config user.email "agent-box@localhost"
+        git -C "$REPO_DIR" config user.name >/dev/null 2>&1 || git -C "$REPO_DIR" config user.name "Agent Box"
+    fi
+}
+
 disable_root_ssh() {
     local config="$HOST_DIR/configuration.nix"
     if grep -q 'services.openssh.settings.PermitRootLogin = "yes";' "$config"; then
@@ -191,8 +198,9 @@ print_plan() {
         echo "  - skip nixos-infect (already on NixOS)"
         echo "  - clone $REPO_URL to $REPO_DIR"
         echo "  - generate $HOST_DIR/hardware-configuration.nix"
+        echo "  - lock flake inputs into $FLAKE_DIR/flake.lock"
         echo "  - run nixos-rebuild switch --flake $FLAKE_DIR#agent-box"
-        echo "  - run interactive setup (password, secrets)"
+        echo "  - run interactive setup (Tailscale, OpenCode, password)"
         echo "  - disable root SSH and rebuild"
         echo "  - print: ssh agent@$(get_ip)"
         return
@@ -220,8 +228,9 @@ print_plan() {
     echo "  - on next root login, automatically:"
     echo "      - clone $REPO_URL to $REPO_DIR"
     echo "      - generate hardware configuration"
+    echo "      - lock flake inputs into $FLAKE_DIR/flake.lock"
     echo "      - run nixos-rebuild switch --flake $FLAKE_DIR#agent-box"
-    echo "      - run interactive setup"
+    echo "      - run interactive setup (Tailscale, OpenCode, password)"
     echo "      - disable root SSH and rebuild"
     echo "      - print: ssh agent@$(get_ip)"
 }
@@ -295,6 +304,15 @@ phase2() {
         nixos-generate-config --show-hardware-config > "$HOST_DIR/hardware-configuration.nix"
     else
         echo "==> Hardware configuration already exists."
+    fi
+
+    ensure_git_identity
+
+    if [[ ! -f "$FLAKE_DIR/flake.lock" ]]; then
+        echo "==> Locking flake inputs..."
+        nix --extra-experimental-features "nix-command flakes" flake lock "$FLAKE_DIR"
+    else
+        echo "==> flake.lock already exists."
     fi
 
     if git -C "$REPO_DIR" status --short | grep -q .; then

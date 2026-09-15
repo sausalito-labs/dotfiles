@@ -115,10 +115,14 @@ The installer will:
 - Reboot.
 - Clone this repo to `/etc/nixos/dotfiles`.
 - Generate a hardware configuration.
+- Lock flake inputs into `flake.lock` for reproducible builds.
 - Apply the agent box NixOS config.
-- Prompt for Tailscale, GitHub, OpenCode, and agent password.
-- Link `agent-box/AGENTS.md` into OpenCode’s system prompt.
+- Prompt for Tailscale, OpenCode, and agent password.
+- Link `agent-box/AGENTS.md` into OpenCode's system prompt.
 - Disable root SSH and rebuild.
+
+After setup, log in as `agent` and run `gh auth login` to authenticate GitHub
+via the website.
 
 ## Already on NixOS?
 

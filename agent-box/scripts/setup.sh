@@ -22,9 +22,7 @@ echo
 # -----------------------------------------------------------------------------
 # Collect secrets interactively
 # -----------------------------------------------------------------------------
-read -rsp "Tailscale/Headscale auth key: " TAILSCALE_AUTHKEY
-echo
-read -rsp "GitHub personal access token: " GITHUB_TOKEN
+read -rsp "Tailscale auth key: " TAILSCALE_AUTHKEY
 echo
 read -rsp "OpenCode API key: " OPENCODE_API_KEY
 echo
@@ -38,7 +36,6 @@ chmod 700 "$SECRETS_DIR"
 
 cat > "$SECRETS_FILE" <<EOF
 TAILSCALE_AUTHKEY=${TAILSCALE_AUTHKEY}
-GITHUB_TOKEN=${GITHUB_TOKEN}
 OPENCODE_API_KEY=${OPENCODE_API_KEY}
 EOF
 chmod 600 "$SECRETS_DIR/secrets.env"
@@ -107,6 +104,10 @@ tailscale status 2>/dev/null || true
 echo
 echo "Services:"
 systemctl status opencode --no-pager 2>/dev/null | head -5
+echo
+echo "GitHub CLI is installed but not yet authenticated."
+echo "Log in via the website with:"
+echo "  sudo -u agent gh auth login"
 echo
 echo "Access from the tailnet:"
 echo "  OpenCode: http://agent-box:4096"
