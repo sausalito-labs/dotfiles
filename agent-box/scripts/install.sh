@@ -321,20 +321,6 @@ phase2() {
         echo "==> Hardware configuration already exists."
     fi
 
-    echo "==> Detecting boot disk..."
-    root_part="$(findmnt -n -o SOURCE / 2>/dev/null || true)"
-    if [[ -n "$root_part" ]]; then
-        root_disk="$(lsblk -no pkname "$root_part" 2>/dev/null || true)"
-        if [[ -n "$root_disk" && "/dev/$root_disk" != "$root_part" ]]; then
-            echo "==> Boot disk detected as /dev/$root_disk; patching configuration.nix"
-            sed -i "s|boot\.loader\.grub\.device = lib\.mkDefault \"/dev/sda\";|boot.loader.grub.device = lib.mkDefault \"/dev/$root_disk\";|" "$HOST_DIR/configuration.nix"
-        else
-            echo "==> Could not detect boot disk. Verify boot.loader.grub.device in $HOST_DIR/configuration.nix"
-        fi
-    else
-        echo "==> Could not detect root mount. Verify boot.loader.grub.device in $HOST_DIR/configuration.nix"
-    fi
-
     if [[ ! -f "$FLAKE_DIR/flake.lock" ]]; then
         echo "==> Locking flake inputs..."
         nix-shell -p git --run "nix --extra-experimental-features 'nix-command flakes' flake lock $FLAKE_DIR"

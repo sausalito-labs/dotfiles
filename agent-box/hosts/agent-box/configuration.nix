@@ -16,10 +16,6 @@
 
   boot.loader.grub = {
     enable = true;
-    # The installer detects the boot disk from the running system and
-    # patches this value before the first rebuild. Only change it manually
-    # if the auto-detection fails.
-    device = lib.mkDefault "/dev/sda";
     configurationLimit = 10;
   };
 
