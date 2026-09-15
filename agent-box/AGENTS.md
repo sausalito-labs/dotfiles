@@ -107,6 +107,18 @@ purge-workflow.sh <name>
 nix-collect-garbage -d
 ```
 
+## Committing changes
+
+When you make changes to workflows or other files, only commit files you
+actually edited. Do **not** commit machine-generated files such as
+`hardware-configuration.nix` or `flake.lock`.
+
+If you accidentally stage them, unstage with:
+
+```bash
+git -C /etc/nixos/dotfiles reset HEAD agent-box/hosts/agent-box/hardware-configuration.nix agent-box/flake.lock
+```
+
 ## Important paths
 
 - `/etc/nixos/dotfiles/` — this repo (system config + workflows)

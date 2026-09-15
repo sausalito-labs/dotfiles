@@ -328,10 +328,10 @@ phase2() {
     nix-shell -p git --run "
         git -C \"$REPO_DIR\" config user.email >/dev/null 2>&1 || git -C \"$REPO_DIR\" config user.email \"agent-box@localhost\"
         git -C \"$REPO_DIR\" config user.name >/dev/null 2>&1 || git -C \"$REPO_DIR\" config user.name \"Agent Box\"
-        # Force-add generated files even though they are gitignored. Flakes
-        # require them to be tracked, but we want git add -A to ignore them.
-        git -C \"$REPO_DIR\" add -f agent-box/hosts/agent-box/hardware-configuration.nix agent-box/flake.lock
-        git -C \"$REPO_DIR\" commit -m \"agent-box: bootstrap\" || true
+        if git -C \"$REPO_DIR\" status --short | grep -q .; then
+            git -C \"$REPO_DIR\" add -A
+            git -C \"$REPO_DIR\" commit -m \"agent-box: bootstrap\"
+        fi
     "
 
     echo "==> Applying initial NixOS configuration..."
