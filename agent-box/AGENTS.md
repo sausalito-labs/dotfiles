@@ -79,7 +79,6 @@ nix-collect-garbage -d
 - `/etc/nixos/dotfiles/` — this repo (system config + workflows)
 - `/etc/nixos/dotfiles/agent-box/workflow/` — runtime workflows
 - `/home/agent/workflow/` — symlink to runtime workflows
-- `/home/agent/one-arcade/` — example game project directory (if used)
 
 ## Rules
 

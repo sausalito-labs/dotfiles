@@ -76,7 +76,7 @@ To move to a different VPS, create a new directory under `hosts/`, import
 6. Run `sudo nixos-install --flake /etc/nixos/dotfiles/agent-box#new-vps` and reboot.
 7. Re-run `/etc/nixos/dotfiles/agent-box/scripts/setup.sh` on the new machine.
 
-## Asset generation pipeline
+## Workflows
 
 Create new workflows under `/home/agent/workflow/` using `new-workflow.sh`. Each
 workflow is a flake that can declare its own packages. Commit the workflow files
