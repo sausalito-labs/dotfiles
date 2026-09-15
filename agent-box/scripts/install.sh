@@ -33,6 +33,7 @@ PHASE2_NIX="/etc/nixos/agent-box-phase2.nix"
 
 DRY_RUN=0
 AUTO_YES="${AUTO_YES:-0}"
+RESET_REPO=0
 
 usage() {
     cat <<EOF
@@ -41,6 +42,8 @@ Usage: $0 [OPTIONS] [phase2]
 Options:
   --dry-run    Print the plan and exit without making changes.
   --yes        Skip the confirmation prompt before nixos-infect.
+  --reset      If the repo already exists, reset it to origin/master before
+               bootstrapping. Useful for rerunning the installer.
   -h, --help   Show this help message.
 
 Environment:
@@ -60,6 +63,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --yes)
             AUTO_YES=1
+            shift
+            ;;
+        --reset)
+            RESET_REPO=1
             shift
             ;;
         phase2)
@@ -235,6 +242,9 @@ print_plan() {
 
     echo "Plan:"
     echo "  - run nixos-infect with NIX_CHANNEL=${detected_channel:-<nixos-infect default>}"
+    if [[ "$RESET_REPO" == "1" ]]; then
+        echo "  - reset $REPO_DIR to origin/master"
+    fi
     echo "  - reboot"
     echo "  - on first boot, a systemd one-shot service will automatically:"
     echo "      - clone $REPO_URL to $REPO_DIR"
@@ -307,7 +317,13 @@ phase2() {
     echo
 
     if [[ -d "$REPO_DIR" ]]; then
-        echo "==> $REPO_DIR already exists. Skipping clone."
+        if [[ "$RESET_REPO" == "1" ]]; then
+            echo "==> Resetting $REPO_DIR to origin/master..."
+            nix-shell -p git --run "git -C \"$REPO_DIR\" fetch origin"
+            nix-shell -p git --run "git -C \"$REPO_DIR\" reset --hard origin/master"
+        else
+            echo "==> $REPO_DIR already exists. Skipping clone."
+        fi
     else
         echo "==> Backing up default /etc/nixos and cloning repo..."
         mv /etc/nixos /etc/nixos.bak
@@ -316,6 +332,22 @@ phase2() {
 
     echo "==> Regenerating hardware configuration..."
     nixos-generate-config --show-hardware-config > "$HOST_DIR/hardware-configuration.nix"
+
+    echo "==> Detecting boot disk..."
+    root_part="$(findmnt -n -o SOURCE / 2>/dev/null || true)"
+    if [[ -n "$root_part" ]]; then
+        root_disk="$(lsblk -no pkname "$root_part" 2>/dev/null || true)"
+        if [[ -n "$root_disk" && "/dev/$root_disk" != "$root_part" ]]; then
+            if ! grep -q 'boot.loader.grub.device' "$HOST_DIR/configuration.nix"; then
+                echo "==> Boot disk detected as /dev/$root_disk; adding to configuration.nix"
+                sed -i '/enable = true;/a\    device = lib.mkDefault "/dev/'"$root_disk"'";' "$HOST_DIR/configuration.nix"
+            fi
+        else
+            echo "==> Could not detect boot disk. Verify boot.loader.grub.device in $HOST_DIR/configuration.nix"
+        fi
+    else
+        echo "==> Could not detect root mount. Verify boot.loader.grub.device in $HOST_DIR/configuration.nix"
+    fi
 
     if [[ ! -f "$FLAKE_DIR/flake.lock" ]]; then
         echo "==> Locking flake inputs..."

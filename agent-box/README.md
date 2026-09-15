@@ -164,6 +164,12 @@ Do **not** test the full installer on hardware you care about. Good options:
   ```bash
   curl ... | bash -s -- --dry-run
   ```
+- `--reset` — if `/etc/nixos/dotfiles` already exists, reset it to
+  `origin/master` before bootstrapping. Useful for rerunning the installer
+  during recovery.
+  ```bash
+  curl ... | bash -s -- --reset
+  ```
 - `NIX_CHANNEL` — pin the NixOS channel used by `nixos-infect`.
   ```bash
   curl ... | NIX_CHANNEL=nixos-24.11 bash
