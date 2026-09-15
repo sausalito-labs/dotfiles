@@ -28,8 +28,8 @@ INSTALL_URL="https://raw.githubusercontent.com/sausalito-labs/dotfiles/master/ag
 REPO_DIR="/etc/nixos/dotfiles"
 FLAKE_DIR="/etc/nixos/dotfiles/agent-box"
 HOST_DIR="/etc/nixos/dotfiles/agent-box/hosts/agent-box"
-SCRIPT_PATH="/root/agent-box-install.sh"
 PHASE2_NIX="/etc/nixos/agent-box-phase2.nix"
+BOOTSTRAP_DONE="/etc/agent-box-bootstrap-done"
 
 DRY_RUN=0
 AUTO_YES="${AUTO_YES:-0}"
@@ -112,15 +112,6 @@ get_latest_stable_channel() {
         | tail -1 || true
 }
 
-persist_script() {
-    if [[ -f "$0" && "$0" != "/dev/stdin" && "$0" != "bash" && "$0" != "-bash" ]]; then
-        cp "$0" "$SCRIPT_PATH"
-    else
-        curl -fsSL "$INSTALL_URL" -o "$SCRIPT_PATH"
-    fi
-    chmod +x "$SCRIPT_PATH"
-}
-
 write_phase2_service() {
     mkdir -p /etc/nixos
 
@@ -166,9 +157,13 @@ write_phase2_service() {
     fi
 
     cat > "$PHASE2_NIX" <<EOF
-{ ... }:
+{ pkgs, ... }:
 
 {
+  # The first-built NixOS system needs these for the phase 2 bootstrap:
+  # curl fetches this installer at first boot, git clones the repo.
+  environment.systemPackages = [ pkgs.curl pkgs.git ];
+
 $root_cfg
   systemd.services.agent-box-phase2 = {
     description = "Agent Box phase 2 bootstrap";
@@ -179,13 +174,14 @@ $root_cfg
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
-      ExecStart = "/root/agent-box-install.sh phase2";
+      # Self-healing trigger: re-fetch this installer at first boot instead of
+      # relying on a copy surviving the reboot. Cache-Control busts stale CDN
+      # copies. Runs once via /etc/agent-box-bootstrap-done.
+      ExecStart = ''/bin/sh -c 'if [ ! -e "$BOOTSTRAP_DONE" ]; then curl -fsSL -H "Cache-Control: no-cache" "$INSTALL_URL" -o /root/agent-box-install.sh && chmod +x /root/agent-box-install.sh && bash /root/agent-box-install.sh phase2; fi' '';
+      Restart = "on-failure";
+      RestartSec = "10s";
       StandardOutput = "journal";
       StandardError = "journal";
-    };
-
-    unitConfig = {
-      ConditionPathExists = "/root/agent-box-install.sh";
     };
   };
 }
@@ -356,8 +352,7 @@ phase1() {
         export NO_SWAP=1
     fi
 
-    echo "==> Persisting installer for phase 2..."
-    persist_script
+    echo "==> Writing phase 2 systemd trigger..."
     write_phase2_service
 
     echo "==> Running nixos-infect..."
@@ -464,9 +459,9 @@ phase2() {
         echo
     fi
 
-    echo "==> Cleaning up bootstrap triggers..."
-    rm -f "$SCRIPT_PATH"
+    echo "==> Cleaning up bootstrap trigger..."
     rm -f "$PHASE2_NIX"
+    touch "$BOOTSTRAP_DONE"
 }
 
 # ---------------------------------------------------------------------------

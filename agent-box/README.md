@@ -104,6 +104,8 @@ workflow files. You do **not** need to push anything to GitHub.
    ```bash
    curl -fsSL https://raw.githubusercontent.com/sausalito-labs/dotfiles/master/agent-box/scripts/install.sh | bash
    ```
+   If you recently updated the installer, pass `-H 'Cache-Control: no-cache'`
+   to avoid fetching a stale CDN-cached copy.
 3. Confirm the wipe and wait for the reboot. Phase 2 starts automatically on
    first boot via a systemd one-shot service.
 4. SSH as root again and run the interactive setup:
