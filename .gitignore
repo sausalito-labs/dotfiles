@@ -1,2 +1,4 @@
 .DS_Store
 *.env
+agent-box/hosts/agent-box/hardware-configuration.nix
+agent-box/flake.lock
