@@ -16,8 +16,9 @@
 
   boot.loader.grub = {
     enable = true;
-    # VPSes usually expose the disk as /dev/sda. Verify with `lsblk`
-    # before running nixos-install and adjust if needed.
+    # The installer detects the boot disk from the running system and
+    # patches this value before the first rebuild. Only change it manually
+    # if the auto-detection fails.
     device = lib.mkDefault "/dev/sda";
     configurationLimit = 10;
   };

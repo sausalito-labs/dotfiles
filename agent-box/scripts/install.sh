@@ -321,6 +321,20 @@ phase2() {
         echo "==> Hardware configuration already exists."
     fi
 
+    echo "==> Detecting boot disk..."
+    root_part="$(findmnt -n -o SOURCE / 2>/dev/null || true)"
+    if [[ -n "$root_part" ]]; then
+        root_disk="$(lsblk -no pkname "$root_part" 2>/dev/null || true)"
+        if [[ -n "$root_disk" && "/dev/$root_disk" != "$root_part" ]]; then
+            echo "==> Boot disk detected as /dev/$root_disk; patching configuration.nix"
+            sed -i "s|boot\.loader\.grub\.device = lib\.mkDefault \"/dev/sda\";|boot.loader.grub.device = lib.mkDefault \"/dev/$root_disk\";|" "$HOST_DIR/configuration.nix"
+        else
+            echo "==> Could not detect boot disk. Verify boot.loader.grub.device in $HOST_DIR/configuration.nix"
+        fi
+    else
+        echo "==> Could not detect root mount. Verify boot.loader.grub.device in $HOST_DIR/configuration.nix"
+    fi
+
     if [[ ! -f "$FLAKE_DIR/flake.lock" ]]; then
         echo "==> Locking flake inputs..."
         nix-shell -p git --run "nix --extra-experimental-features 'nix-command flakes' flake lock $FLAKE_DIR"
@@ -341,7 +355,7 @@ phase2() {
     echo "==> Applying initial NixOS configuration..."
     nix-shell -p git --run "nixos-rebuild switch --flake $FLAKE_DIR#agent-box"
 
-    if [[ -t 0 ]]; then
+    if [[ -z "${INVOCATION_ID:-}" ]]; then
         echo "==> Running interactive setup..."
         "$FLAKE_DIR/scripts/setup.sh"
 
@@ -352,23 +366,31 @@ phase2() {
 
         echo "==> Rebuilding with root SSH disabled..."
         nix-shell -p git --run "nixos-rebuild switch --flake $FLAKE_DIR#agent-box"
+
+        echo
+        echo "============================================================"
+        echo " Setup complete."
+        echo "============================================================"
+        echo "Root SSH is now disabled. Log in as agent:"
+        echo "  ssh agent@$(get_ip)"
+        echo
     else
         echo "==> Running under systemd without a TTY; skipping interactive setup."
         echo "    Root SSH remains enabled. After this bootstrap finishes, log in as root and run:"
         echo "      $FLAKE_DIR/scripts/setup.sh"
+
+        echo
+        echo "============================================================"
+        echo " Bootstrap complete."
+        echo "============================================================"
+        echo "Root SSH is still enabled. Log in as root and run setup:"
+        echo "  $FLAKE_DIR/scripts/setup.sh"
+        echo
     fi
 
     echo "==> Cleaning up bootstrap triggers..."
     rm -f "$SCRIPT_PATH"
     rm -f "$PHASE2_NIX"
-
-    echo
-    echo "============================================================"
-    echo " Setup complete."
-    echo "============================================================"
-    echo "Root SSH is now disabled. Log in as agent:"
-    echo "  ssh agent@$(get_ip)"
-    echo
 }
 
 # ---------------------------------------------------------------------------

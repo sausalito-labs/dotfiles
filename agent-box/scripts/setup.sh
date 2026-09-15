@@ -22,13 +22,13 @@ echo
 # -----------------------------------------------------------------------------
 # Collect secrets interactively
 # -----------------------------------------------------------------------------
-read -rsp "Tailscale auth key: " TAILSCALE_AUTHKEY
+read -rsp "Tailscale auth key: " TAILSCALE_AUTHKEY </dev/tty
 echo
-read -rsp "OpenCode API key: " OPENCODE_API_KEY
+read -rsp "OpenCode API key: " OPENCODE_API_KEY </dev/tty
 echo
-read -rsp "OpenCode web UI password: " OPENCODE_PASSWORD
+read -rsp "OpenCode web UI password: " OPENCODE_PASSWORD </dev/tty
 echo
-read -rsp "Set password for user '$USER': " AGENT_PASSWORD
+read -rsp "Set password for user '$USER': " AGENT_PASSWORD </dev/tty
 echo
 
 mkdir -p "$SECRETS_DIR"
@@ -68,10 +68,33 @@ systemctl restart opencode
 # -----------------------------------------------------------------------------
 mkdir -p /home/agent/.config/opencode
 if [[ -f /etc/nixos/dotfiles/agent-box/AGENTS.md ]]; then
-    ln -sf /etc/nixos/dotfiles/agent-box/AGENTS.md /home/agent/.config/opencode/AGENTS.md
+    # AGENT_BOX contains the agent-box specific rules. It is loaded via
+    # opencode.json so the clean AGENTS.md stays free for custom prompts.
+    ln -sf /etc/nixos/dotfiles/agent-box/AGENTS.md /home/agent/.config/opencode/AGENT_BOX
     chown -R agent:agent /home/agent/.config/opencode
-    echo "==> Linked agent instructions to ~/.config/opencode/AGENTS.md"
+    echo "==> Linked agent-box instructions to ~/.config/opencode/AGENT_BOX"
 fi
+
+# Create a clean AGENTS.md for custom system prompts if one does not exist.
+if [[ ! -f /home/agent/.config/opencode/AGENTS.md ]]; then
+    cat > /home/agent/.config/opencode/AGENTS.md <<'EOF'
+# System Prompts
+
+Add custom system prompts here.
+EOF
+    chown agent:agent /home/agent/.config/opencode/AGENTS.md
+    echo "==> Created clean ~/.config/opencode/AGENTS.md"
+fi
+
+# Load AGENT_BOX as an instruction file. Combined with AGENTS.md by OpenCode.
+cat > /home/agent/.config/opencode/opencode.json <<'EOF'
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["/home/agent/.config/opencode/AGENT_BOX"]
+}
+EOF
+chown agent:agent /home/agent/.config/opencode/opencode.json
+echo "==> Wrote ~/.config/opencode/opencode.json"
 
 # -----------------------------------------------------------------------------
 # Optional: Godot export templates
@@ -81,7 +104,7 @@ echo "The game workflow is available at /etc/nixos/dotfiles/agent-box/workflows/
 echo "Enter it with: enter-workflow.sh game"
 echo
 
-read -rp "Install Godot 4 export templates now? [Y/n] " INSTALL_TEMPLATES
+read -rp "Install Godot 4 export templates now? [Y/n] " INSTALL_TEMPLATES </dev/tty
 INSTALL_TEMPLATES=${INSTALL_TEMPLATES:-Y}
 
 if [[ "$INSTALL_TEMPLATES" =~ ^[Yy]$ ]]; then
