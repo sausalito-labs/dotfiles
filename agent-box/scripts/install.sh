@@ -122,6 +122,8 @@ persist_script() {
 }
 
 write_phase2_service() {
+    mkdir -p /etc/nixos
+
     # Preserve root access across the disk wipe: bake the current root
     # password hash and SSH keys into the first NixOS system. nixos-infect
     # does not carry /etc/shadow, so without this root would have no password.
