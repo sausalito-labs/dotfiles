@@ -2,10 +2,6 @@
 
 NixOS flake for an agent box with workflows.
 
-> **Warning:** The installer below uses `nixos-infect`, which **wipes the entire
-> disk**. Only run it on a machine you are willing to erase (a fresh VPS or a
-> throwaway VM). It is **not** for macOS, Windows, or your main machine.
-
 ## What this is and what it isn't
 
 **This is:**
