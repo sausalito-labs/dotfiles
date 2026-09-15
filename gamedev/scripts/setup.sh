@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Interactive one-time setup for the NixOS gamedev box.
+# Interactive one-time setup for the NixOS agent box.
 # Run this as root after the first NixOS boot.
 
 set -euo pipefail
 
-USER="gamedev"
-HOME_DIR="/home/gamedev"
-SECRETS_DIR="/var/lib/gamedev-setup"
+USER="agent"
+HOME_DIR="/home/agent"
+SECRETS_DIR="/var/lib/agent-setup"
 SECRETS_FILE="$SECRETS_DIR/secrets.env"
 
 if [[ "$EUID" -ne 0 ]]; then
@@ -15,7 +15,7 @@ if [[ "$EUID" -ne 0 ]]; then
 fi
 
 echo "============================================================"
-echo " NixOS Gamedev Box - First-Time Setup"
+echo " NixOS Agent Box - First-Time Setup"
 echo "============================================================"
 echo
 
@@ -30,6 +30,8 @@ read -rsp "OpenCode API key: " OPENCODE_API_KEY
 echo
 read -rsp "OpenCode web UI password: " OPENCODE_PASSWORD
 echo
+read -rsp "Set password for user '$USER': " AGENT_PASSWORD
+echo
 
 mkdir -p "$SECRETS_DIR"
 chmod 700 "$SECRETS_DIR"
@@ -42,26 +44,48 @@ EOF
 chmod 600 "$SECRETS_DIR/secrets.env"
 
 # -----------------------------------------------------------------------------
+# Set agent user password
+# -----------------------------------------------------------------------------
+echo "$USER:$AGENT_PASSWORD" | chpasswd
+
+# -----------------------------------------------------------------------------
 # Set OpenCode web password
 # -----------------------------------------------------------------------------
 mkdir -p /var/lib/opencode
-chown gamedev:gamedev /var/lib/opencode
+chown agent:agent /var/lib/opencode
 cat > /var/lib/opencode/opencode.env <<EOF
 OPENCODE_SERVER_PASSWORD=${OPENCODE_PASSWORD}
 EOF
 chmod 600 /var/lib/opencode/opencode.env
-systemctl restart opencode
 
 # -----------------------------------------------------------------------------
 # Run the automated auth setup
 # -----------------------------------------------------------------------------
 /etc/nixos/gamedev/scripts/setup-secrets.sh
 
+# Make sure the OpenCode service sees the new secrets.
+systemctl restart opencode
+
+# -----------------------------------------------------------------------------
+# Optional: Copy game environment template
+# -----------------------------------------------------------------------------
+echo
+read -rp "Copy the game environment template now? [Y/n] " COPY_GAME_ENV
+COPY_GAME_ENV=${COPY_GAME_ENV:-Y}
+
+if [[ "$COPY_GAME_ENV" =~ ^[Yy]$ ]]; then
+    echo "==> Copying game environment template..."
+    mkdir -p /etc/nixos/gamedev/agent/envs
+    cp -r /etc/nixos/gamedev/templates/envs/game /etc/nixos/gamedev/agent/envs/
+    chown -R agent:agent /etc/nixos/gamedev/agent/envs/game
+    echo "Copied. Enter it with: enter-env.sh game"
+fi
+
 # -----------------------------------------------------------------------------
 # Optional: Godot export templates
 # -----------------------------------------------------------------------------
 echo
-read -rp "Install Godot 4.3 export templates now? [Y/n] " INSTALL_TEMPLATES
+read -rp "Install Godot 4 export templates now? [Y/n] " INSTALL_TEMPLATES
 INSTALL_TEMPLATES=${INSTALL_TEMPLATES:-Y}
 
 if [[ "$INSTALL_TEMPLATES" =~ ^[Yy]$ ]]; then
@@ -88,5 +112,5 @@ echo
 systemctl status one-arcade-demo --no-pager 2>/dev/null | head -5
 echo
 echo "Access from the tailnet:"
-echo "  OpenCode: http://netcup-gamedev:4096"
-echo "  Demo:     https://netcup-gamedev:8765/"
+echo "  OpenCode: http://agent-box:4096"
+echo "  Demo:     https://agent-box:8765/"

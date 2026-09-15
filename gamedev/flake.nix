@@ -1,5 +1,5 @@
 {
-  description = "Vendor-agnostic NixOS configuration for a headless gamedev box";
+  description = "Vendor-agnostic NixOS configuration for an agent box";
 
   inputs = {
     # Pin to the latest stable release for predictability.
@@ -7,12 +7,12 @@
   };
 
   outputs = { self, nixpkgs, ... }: {
-    # Current machine: netcup VPS.
+    # Current machine: agent box VPS.
     # Add more hosts here as `hosts/<name>/configuration.nix` files.
-    nixosConfigurations.netcup = nixpkgs.lib.nixosSystem {
+    nixosConfigurations.agent-box = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
       modules = [
-        ./hosts/netcup/configuration.nix
+        ./hosts/agent-box/configuration.nix
       ];
     };
   };

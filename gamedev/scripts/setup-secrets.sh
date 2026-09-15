@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# One-time bootstrap script for secrets and auth on the NixOS gamedev box.
+# One-time bootstrap script for secrets and auth on the NixOS agent box.
 #
-# Create /var/lib/gamedev-setup/secrets.env with:
+# Create /var/lib/agent-setup/secrets.env with:
 #
 #   TAILSCALE_AUTHKEY=tskey-auth-...
 #   GITHUB_TOKEN=ghp_...
@@ -11,9 +11,9 @@
 
 set -euo pipefail
 
-SECRETS_FILE="/var/lib/gamedev-setup/secrets.env"
-USER="gamedev"
-HOME_DIR="/home/gamedev"
+SECRETS_FILE="/var/lib/agent-setup/secrets.env"
+USER="agent"
+HOME_DIR="/home/agent"
 
 if [[ ! -f "$SECRETS_FILE" ]]; then
     echo "ERROR: Secrets file not found at $SECRETS_FILE" >&2
@@ -66,8 +66,5 @@ EOF
 else
     echo "==> OpenCode auth file already exists."
 fi
-
-# Make sure the opencode systemd service sees the new auth.
-systemctl restart opencode || true
 
 echo "==> Auth setup complete."

@@ -1,7 +1,7 @@
-# Generic NixOS module for a headless gamedev box.
+# Generic NixOS module for an agent box.
 #
-# This module is vendor-agnostic: it sets up the gamedev user, OpenCode, Godot,
-# Tailscale, and the One Arcade demo server. It does NOT include any
+# This module is vendor-agnostic: it sets up the agent user, OpenCode,
+# Tailscale, SSH, and the One Arcade demo server. It does NOT include any
 # hardware-specific configuration, so a host file must import this module and
 # provide a generated hardware-configuration.nix.
 
@@ -32,34 +32,6 @@ let
       platforms = [ "x86_64-linux" ];
     };
   };
-
-  # Official Godot 4.3 stable binary. Using the upstream release avoids waiting
-  # for nixpkgs to bump versions.
-  godot-4_3 = pkgs.stdenv.mkDerivation rec {
-    pname = "godot";
-    version = "4.3-stable";
-
-    src = pkgs.fetchurl {
-      url = "https://github.com/godotengine/godot/releases/download/${version}/Godot_v${version}_linux.x86_64.zip";
-      hash = "sha256-feVkRLEwsQr4TRnH4M9jz56ZN+5LqUNkw7fdEUJTyiE=";
-    };
-
-    nativeBuildInputs = [ pkgs.unzip ];
-    dontBuild = true;
-
-    installPhase = ''
-      mkdir -p $out/bin
-      install -m 755 Godot_v${version}_linux.x86_64 $out/bin/godot
-      ln -s $out/bin/godot $out/bin/godot4
-    '';
-
-    meta = with lib; {
-      description = "Godot game engine";
-      homepage = "https://godotengine.org";
-      license = licenses.mit;
-      platforms = [ "x86_64-linux" ];
-    };
-  };
 in
 {
   # ----------------------------------------------------------------------------
@@ -71,16 +43,16 @@ in
   # ----------------------------------------------------------------------------
   # Users
   # ----------------------------------------------------------------------------
-  users.users.gamedev = {
+  users.users.agent = {
     isNormalUser = true;
-    home = "/home/gamedev";
-    description = "Game dev user";
+    home = "/home/agent";
+    description = "Agent user";
     extraGroups = [ "wheel" "networkmanager" ];
     # The host configuration should override this with the actual SSH key.
     openssh.authorizedKeys.keys = lib.mkDefault [];
   };
 
-  # Passwordless sudo for the gamedev user makes tmux/systemctl workflows less
+  # Passwordless sudo for the agent user makes tmux/systemctl workflows less
   # annoying. Remove this if you prefer typing a password.
   security.sudo.wheelNeedsPassword = false;
 
@@ -90,8 +62,8 @@ in
   services.openssh = {
     enable = true;
     settings = {
-      PasswordAuthentication = false;
-      PermitRootLogin = "no";
+      PasswordAuthentication = true;
+      PermitRootLogin = lib.mkDefault "no";
     };
   };
 
@@ -122,22 +94,21 @@ in
     wget
     unzip
     htop
-    vim
-    nano
     python3
-    chromium
-    chromedriver
     openssl
-    godot-4_3
     opencode
   ];
 
-  # Make Godot export templates discoverable at the path our build scripts expect.
+  # Make Godot export templates and OpenCode state directories discoverable.
+  # Agent environments live under /etc/nixos/gamedev/agent/envs and are
+  # symlinked into /home/agent/envs for convenience.
   systemd.tmpfiles.rules = [
-    "d /home/gamedev/.local/share/godot/export_templates 0755 gamedev gamedev -"
-    "d /var/lib/opencode 0750 gamedev gamedev -"
-    "d /home/gamedev/.config/opencode 0755 gamedev gamedev -"
-    "d /home/gamedev/.local/share/opencode 0755 gamedev gamedev -"
+    "d /home/agent/.local/share/godot/export_templates 0755 agent agent -"
+    "d /var/lib/opencode 0750 agent agent -"
+    "d /home/agent/.config/opencode 0755 agent agent -"
+    "d /home/agent/.local/share/opencode 0755 agent agent -"
+    "d /etc/nixos/gamedev/agent/envs 0755 agent agent -"
+    "L+ /home/agent/envs - - - - /etc/nixos/gamedev/agent/envs"
   ];
 
   # ----------------------------------------------------------------------------
@@ -146,14 +117,14 @@ in
   systemd.services.opencode = {
     description = "OpenCode web interface";
     after = [ "network-online.target" "tailscaled.service" ];
-    wants = [ "tailscaled.service" ];
+    wants = [ "network-online.target" "tailscaled.service" ];
     wantedBy = [ "multi-user.target" ];
 
     serviceConfig = {
       Type = "simple";
-      User = "gamedev";
-      Group = "gamedev";
-      WorkingDirectory = "/home/gamedev";
+      User = "agent";
+      Group = "agent";
+      WorkingDirectory = "/home/agent";
       ExecStart = "${opencode}/bin/opencode web --port 4096 --hostname 0.0.0.0";
       Restart = "always";
       RestartSec = 5;
@@ -167,14 +138,14 @@ in
   systemd.services.one-arcade-demo = {
     description = "One Arcade HTML5 demo server";
     after = [ "network-online.target" "tailscaled.service" ];
-    wants = [ "tailscaled.service" ];
+    wants = [ "network-online.target" "tailscaled.service" ];
     wantedBy = [ "multi-user.target" ];
 
     serviceConfig = {
       Type = "simple";
-      User = "gamedev";
-      Group = "gamedev";
-      WorkingDirectory = "/home/gamedev/one-arcade";
+      User = "agent";
+      Group = "agent";
+      WorkingDirectory = "/home/agent/one-arcade";
       ExecStart = "${pkgs.python3}/bin/python3 scripts/serve_demo.py --host 0.0.0.0 --port 8765 --directory build/html5 --https true";
       Restart = "always";
       RestartSec = 10;
