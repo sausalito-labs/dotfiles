@@ -328,8 +328,6 @@ phase2() {
         echo "==> Hardware configuration already exists."
     fi
 
-    ensure_git_identity
-
     if [[ ! -f "$FLAKE_DIR/flake.lock" ]]; then
         echo "==> Locking flake inputs..."
         nix --extra-experimental-features "nix-command flakes" flake lock "$FLAKE_DIR"
@@ -337,14 +335,16 @@ phase2() {
         echo "==> flake.lock already exists."
     fi
 
+    echo "==> Applying initial NixOS configuration..."
+    nix-shell -p git --run "nixos-rebuild switch --flake $FLAKE_DIR#agent-box"
+
+    ensure_git_identity
+
     if git -C "$REPO_DIR" status --short | grep -q .; then
         echo "==> Committing bootstrap changes..."
         git -C "$REPO_DIR" add -A
         git -C "$REPO_DIR" commit -m "agent-box: bootstrap"
     fi
-
-    echo "==> Applying initial NixOS configuration..."
-    nix-shell -p git --run "nixos-rebuild switch --flake $FLAKE_DIR#agent-box"
 
     if [[ -t 0 ]]; then
         echo "==> Running interactive setup..."
