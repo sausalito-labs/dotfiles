@@ -45,12 +45,15 @@ in
   # ----------------------------------------------------------------------------
   users.users.agent = {
     isNormalUser = true;
+    group = "agent";
     home = "/home/agent";
     description = "Agent user";
     extraGroups = [ "wheel" "networkmanager" ];
     # The host configuration should override this with the actual SSH key.
     openssh.authorizedKeys.keys = lib.mkDefault [];
   };
+
+  users.groups.agent = { };
 
   # Passwordless sudo for the agent user makes tmux/systemctl workflows less
   # annoying. Remove this if you prefer typing a password.
