@@ -91,7 +91,6 @@ in
     gh
     tmux
     curl
-    wget
     unzip
     htop
     python3
@@ -100,15 +99,15 @@ in
   ];
 
   # Make Godot export templates and OpenCode state directories discoverable.
-  # Agent environments live under /etc/nixos/dotfiles/agent-box/agent/envs and are
-  # symlinked into /home/agent/envs for convenience.
+  # Agent workflows live under /etc/nixos/dotfiles/agent-box/workflow and are
+  # symlinked into /home/agent/workflow for convenience.
   systemd.tmpfiles.rules = [
     "d /home/agent/.local/share/godot/export_templates 0755 agent agent -"
     "d /var/lib/opencode 0750 agent agent -"
     "d /home/agent/.config/opencode 0755 agent agent -"
     "d /home/agent/.local/share/opencode 0755 agent agent -"
-    "d /etc/nixos/dotfiles/agent-box/agent/envs 0755 agent agent -"
-    "L+ /home/agent/envs - - - - /etc/nixos/dotfiles/agent-box/agent/envs"
+    "d /etc/nixos/dotfiles/agent-box/workflow 0755 agent agent -"
+    "L+ /home/agent/workflow - - - - /etc/nixos/dotfiles/agent-box/workflow"
   ];
 
   # ----------------------------------------------------------------------------

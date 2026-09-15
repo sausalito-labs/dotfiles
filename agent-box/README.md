@@ -1,10 +1,53 @@
 # Agent Box
 
-NixOS flake for an agent box with workspace environments.
+NixOS flake for an agent box with workflows.
 
 > **Warning:** The installer below uses `nixos-infect`, which **wipes the entire
 > disk**. Only run it on a machine you are willing to erase (a fresh VPS or a
 > throwaway VM). It is **not** for macOS, Windows, or your main machine.
+
+## How it works
+
+The agent box keeps a small, stable base system and puts all project-specific
+tooling into **workflows**.
+
+- **Base system**: OpenCode, git, gh, tmux, curl, htop, python3, openssl, plus
+  SSH, Tailscale, and firewall.
+- **Workflows**: per-project flakes under `/home/agent/workflow/`. Each workflow
+  declares its own packages.
+
+### Try → pin → commit loop
+
+When you want to try a new tool:
+
+```bash
+new-workflow.sh assets template
+enter-workflow.sh assets
+nix-shell -p some-experimental-tool --run "some-experimental-tool --help"
+```
+
+If it works, pin it permanently:
+
+```bash
+vim /home/agent/workflow/assets/flake.nix   # add some-experimental-tool
+enter-workflow.sh assets                     # reload with the pinned tool
+```
+
+If it does not work, throw it away:
+
+```bash
+exit
+purge-workflow.sh assets
+nix-collect-garbage -d
+```
+
+No leftover state in the base system.
+
+### Cleanup
+
+- Remove a workflow: `purge-workflow.sh <name>`
+- Clean downloaded packages: `nix-collect-garbage -d`
+- Reset everything: reinstall NixOS, run the installer again.
 
 ## Bootstrap a fresh VPS
 
@@ -26,6 +69,7 @@ The installer will:
 - Generate a hardware configuration.
 - Apply the agent box NixOS config.
 - Prompt for Tailscale, GitHub, OpenCode, and agent password.
+- Link `agent-box/AGENTS.md` into OpenCode’s system prompt.
 - Disable root SSH and rebuild.
 
 ## Already on NixOS?
@@ -70,18 +114,18 @@ Do **not** test the full installer on hardware you care about. Good options:
   curl ... | NIX_CHANNEL=nixos-24.11 bash
   ```
 
-## Workspaces
+## Workflows
 
-Create, enter, and remove environments:
+Create, enter, and remove workflows:
 
 ```bash
-new-env.sh my-webpage webpage
-enter-env.sh my-webpage
-purge-env.sh my-webpage
+new-workflow.sh my-webpage webpage
+enter-workflow.sh my-webpage
+purge-workflow.sh my-webpage
 ```
 
-Edit `/home/agent/envs/<name>/flake.nix` to add packages. Changes are stored
-under `/etc/nixos/dotfiles/agent-box/agent/envs/`, so commit them with the repo
+Edit `/home/agent/workflow/<name>/flake.nix` to add packages. Changes are stored
+under `/etc/nixos/dotfiles/agent-box/workflow/`, so commit them with the repo
 to back them up.
 
 ## Structure
@@ -90,7 +134,8 @@ to back them up.
 - `hosts/agent-box/` — machine-specific config for the current VPS.
 - `scripts/install.sh` — one-shot installer.
 - `scripts/setup.sh` — interactive first-boot setup (called by installer).
-- `templates/envs/` — environment templates.
-- `agent/envs/` — runtime environments.
+- `templates/workflow/` — workflow templates.
+- `workflow/` — runtime workflows.
+- `AGENTS.md` — instructions injected into OpenCode’s system prompt.
 
 See `hosts/agent-box/README.md` for migration and adding new hosts.

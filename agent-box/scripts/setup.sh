@@ -67,18 +67,28 @@ chmod 600 /var/lib/opencode/opencode.env
 systemctl restart opencode
 
 # -----------------------------------------------------------------------------
-# Optional: Copy game environment template
+# Inject agent instructions into OpenCode
+# -----------------------------------------------------------------------------
+mkdir -p /home/agent/.config/opencode
+if [[ -f /etc/nixos/dotfiles/agent-box/AGENTS.md ]]; then
+    ln -sf /etc/nixos/dotfiles/agent-box/AGENTS.md /home/agent/.config/opencode/AGENTS.md
+    chown -R agent:agent /home/agent/.config/opencode
+    echo "==> Linked agent instructions to ~/.config/opencode/AGENTS.md"
+fi
+
+# -----------------------------------------------------------------------------
+# Optional: Copy game workflow template
 # -----------------------------------------------------------------------------
 echo
-read -rp "Copy the game environment template now? [Y/n] " COPY_GAME_ENV
-COPY_GAME_ENV=${COPY_GAME_ENV:-Y}
+read -rp "Copy the game workflow template now? [Y/n] " COPY_GAME_WORKFLOW
+COPY_GAME_WORKFLOW=${COPY_GAME_WORKFLOW:-Y}
 
-if [[ "$COPY_GAME_ENV" =~ ^[Yy]$ ]]; then
-    echo "==> Copying game environment template..."
-    mkdir -p /etc/nixos/dotfiles/agent-box/agent/envs
-    cp -r /etc/nixos/dotfiles/agent-box/templates/envs/game /etc/nixos/dotfiles/agent-box/agent/envs/
-    chown -R agent:agent /etc/nixos/dotfiles/agent-box/agent/envs/game
-    echo "Copied. Enter it with: enter-env.sh game"
+if [[ "$COPY_GAME_WORKFLOW" =~ ^[Yy]$ ]]; then
+    echo "==> Copying game workflow template..."
+    mkdir -p /etc/nixos/dotfiles/agent-box/workflow
+    cp -r /etc/nixos/dotfiles/agent-box/templates/workflow/game /etc/nixos/dotfiles/agent-box/workflow/
+    chown -R agent:agent /etc/nixos/dotfiles/agent-box/workflow/game
+    echo "Copied. Enter it with: enter-workflow.sh game"
 fi
 
 # -----------------------------------------------------------------------------

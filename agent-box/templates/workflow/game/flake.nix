@@ -1,5 +1,5 @@
 {
-  description = "Game development environment";
+  description = "Game development workflow";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";

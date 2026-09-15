@@ -23,7 +23,7 @@ To move to a different VPS, create a new directory under `hosts/`, import
 ## What this gives you
 
 - Declarative, reproducible NixOS system configuration.
-- `modules/agent.nix` defines the shared agent environment.
+- `modules/agent.nix` defines the shared agent workflow base.
 - `hosts/agent-box/configuration.nix` adds only hostname, disk, and SSH key.
 - `nixos-rebuild switch` applies the entire system state.
 - systemd services run OpenCode.
@@ -48,9 +48,9 @@ To move to a different VPS, create a new directory under `hosts/`, import
   tmux attach -t agent
   ```
 
-- Enter a development environment:
+- Enter a workflow:
   ```bash
-  enter-env.sh game
+  enter-workflow.sh game
   ```
 
 ## Migrating to a new VPS
@@ -78,6 +78,6 @@ To move to a different VPS, create a new directory under `hosts/`, import
 
 ## Asset generation pipeline
 
-Create new environments under `/home/agent/envs/` using `new-env.sh`. Each
-environment is a flake that can declare its own packages. Commit the env files
-in `/etc/nixos/dotfiles/agent-box/agent/envs/` with the rest of the repo.
+Create new workflows under `/home/agent/workflow/` using `new-workflow.sh`. Each
+workflow is a flake that can declare its own packages. Commit the workflow files
+in `/etc/nixos/dotfiles/agent-box/workflow/` with the rest of the repo.

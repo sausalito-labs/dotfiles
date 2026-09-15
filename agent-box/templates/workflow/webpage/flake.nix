@@ -1,5 +1,5 @@
 {
-  description = "Agent environment template";
+  description = "Web development workflow";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
@@ -13,9 +13,8 @@
     {
       devShells.default = pkgs.mkShell {
         packages = with pkgs; [
-          # Add packages here, e.g.:
-          # nodejs
-          # pnpm
+          nodejs
+          pnpm
         ];
       };
     };
