@@ -8,7 +8,7 @@ Declarative system configuration, organized by environment.
   - `hosts/agent-box/` — machine-specific config for the current VPS.
   - `scripts/install.sh` — one-shot installer for a fresh VPS.
   - `scripts/setup.sh` — interactive first-boot setup.
-  - `templates/` — workflow templates.
+  - `workflows/` — workflows (also serve as templates).
 
 See `agent-box/README.md` for bootstrap and `agent-box/hosts/agent-box/README.md`
 for migration and daily-use details.

@@ -4,13 +4,21 @@
 set -euo pipefail
 
 WORKFLOW_NAME="${1:-}"
+WORKFLOWS_DIR="/etc/nixos/dotfiles/agent-box/workflows"
+WORKFLOW_DIR="$WORKFLOWS_DIR/$WORKFLOW_NAME"
 
 if [[ -z "$WORKFLOW_NAME" ]]; then
     echo "Usage: $0 <workflow-name>" >&2
     exit 1
 fi
 
-WORKFLOW_DIR="/etc/nixos/dotfiles/agent-box/workflow/$WORKFLOW_NAME"
+# Protect built-in templates/workflows from accidental deletion.
+case "$WORKFLOW_NAME" in
+    template|game|webpage)
+        echo "ERROR: '$WORKFLOW_NAME' is a built-in workflow/template. Not removing." >&2
+        exit 1
+        ;;
+esac
 
 if [[ ! -d "$WORKFLOW_DIR" ]]; then
     echo "ERROR: Workflow '$WORKFLOW_NAME' not found at $WORKFLOW_DIR" >&2

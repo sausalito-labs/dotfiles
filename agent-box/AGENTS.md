@@ -17,8 +17,16 @@ The following are always available without entering a workflow:
 ## Workflows
 
 A **workflow** is a per-project Nix flake that lives under
-`/home/agent/workflow/<name>/`. Workflows declare their own packages so you can
-install arbitrary tools without touching the base system.
+`/etc/nixos/dotfiles/agent-box/workflows/<name>/`. Workflows declare their own
+packages so you can install arbitrary tools without touching the base system.
+
+### Pre-made workflows
+
+These also serve as templates:
+
+- `template` — empty starter
+- `game` — Godot 4, Python 3, unzip, curl
+- `webpage` — Node.js, pnpm
 
 ### Workflow commands
 
@@ -28,12 +36,12 @@ enter-workflow.sh <name>            # enter a workflow's nix develop shell
 purge-workflow.sh <name>            # delete a workflow
 ```
 
-Templates live in `/etc/nixos/dotfiles/agent-box/templates/`.
-Available out of the box:
+You can also create a workflow manually by copying a template:
 
-- `template` — empty starter
-- `game` — Godot 4, Python 3, unzip, curl
-- `webpage` — Node.js, pnpm
+```bash
+cp -r /etc/nixos/dotfiles/agent-box/workflows/template \
+      /etc/nixos/dotfiles/agent-box/workflows/my-workflow
+```
 
 ### Try → pin → commit
 
@@ -58,11 +66,24 @@ When you need a new tool:
    enter-workflow.sh <name>
    ```
 
-5. Commit the workflow so it survives reinstalls:
+5. Commit the workflow locally so Nix can see it:
    ```bash
-   git -C /etc/nixos/dotfiles add agent-box/workflow/<name>
+   git -C /etc/nixos/dotfiles add agent-box/workflows/<name>
    git -C /etc/nixos/dotfiles commit -m "add <tool> to <name> workflow"
    ```
+
+   You do not need to push this commit to GitHub.
+
+### Updating a template
+
+If you find a workflow setup that should become the default for future projects,
+edit the corresponding template directly:
+
+```bash
+vim /etc/nixos/dotfiles/agent-box/workflows/game/flake.nix
+```
+
+Then commit locally.
 
 ### Cleanup
 
@@ -77,8 +98,8 @@ nix-collect-garbage -d
 ## Important paths
 
 - `/etc/nixos/dotfiles/` — this repo (system config + workflows)
-- `/etc/nixos/dotfiles/agent-box/workflow/` — runtime workflows
-- `/home/agent/workflow/` — symlink to runtime workflows
+- `/etc/nixos/dotfiles/agent-box/workflows/` — workflows and templates
+- `/home/agent/.config/opencode/AGENTS.md` — this file
 
 ## Rules
 

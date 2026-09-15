@@ -11,43 +11,65 @@ NixOS flake for an agent box with workflows.
 The agent box keeps a small, stable base system and puts all project-specific
 tooling into **workflows**.
 
-- **Base system**: OpenCode, git, gh, tmux, curl, htop, python3, openssl, plus
-  SSH, Tailscale, and firewall.
-- **Workflows**: per-project flakes under `/home/agent/workflow/`. Each workflow
-  declares its own packages.
+- **Base system**: OpenCode, git, gh, tmux, curl, unzip, htop, python3, openssl,
+  plus SSH, Tailscale, and firewall.
+- **Workflows**: per-project flakes under `/etc/nixos/dotfiles/agent-box/workflows/`.
+  Each workflow declares its own packages.
+
+The pre-made workflows are also templates:
+
+- `template` — empty starter
+- `game` — Godot 4, Python 3, unzip, curl
+- `webpage` — Node.js, pnpm
 
 ### Try → pin → commit loop
 
 When you want to try a new tool:
 
 ```bash
-new-workflow.sh assets template
-enter-workflow.sh assets
+enter-workflow.sh game
 nix-shell -p some-experimental-tool --run "some-experimental-tool --help"
 ```
 
 If it works, pin it permanently:
 
 ```bash
-vim /home/agent/workflow/assets/flake.nix   # add some-experimental-tool
-enter-workflow.sh assets                     # reload with the pinned tool
+vim /etc/nixos/dotfiles/agent-box/workflows/game/flake.nix
+exit
+enter-workflow.sh game
 ```
 
 If it does not work, throw it away:
 
 ```bash
 exit
+# only needed if you created a new workflow first
 purge-workflow.sh assets
 nix-collect-garbage -d
 ```
 
 No leftover state in the base system.
 
+### Creating a new workflow from a template
+
+```bash
+new-workflow.sh assets template
+enter-workflow.sh assets
+```
+
+This copies `workflows/template/` to `workflows/assets/`.
+
 ### Cleanup
 
 - Remove a workflow: `purge-workflow.sh <name>`
 - Clean downloaded packages: `nix-collect-garbage -d`
 - Reset everything: reinstall NixOS, run the installer again.
+
+### Note on local commits
+
+The installer creates a `hardware-configuration.nix` and may create workflows on
+the VPS. These live inside `/etc/nixos/dotfiles/` and are committed **locally** so
+Nix flakes can see them. You do **not** need to push them to GitHub.
 
 ## Bootstrap a fresh VPS
 
@@ -124,9 +146,9 @@ enter-workflow.sh my-webpage
 purge-workflow.sh my-webpage
 ```
 
-Edit `/home/agent/workflow/<name>/flake.nix` to add packages. Changes are stored
-under `/etc/nixos/dotfiles/agent-box/workflow/`, so commit them with the repo
-to back them up.
+Edit `/etc/nixos/dotfiles/agent-box/workflows/<name>/flake.nix` to add packages.
+Changes are stored under `/etc/nixos/dotfiles/agent-box/workflows/` and committed
+locally so the flake can use them.
 
 ## Structure
 
@@ -134,8 +156,7 @@ to back them up.
 - `hosts/agent-box/` — machine-specific config for the current VPS.
 - `scripts/install.sh` — one-shot installer.
 - `scripts/setup.sh` — interactive first-boot setup (called by installer).
-- `templates/` — workflow templates.
-- `workflow/` — runtime workflows.
+- `workflows/` — workflows (also serve as templates).
 - `AGENTS.md` — instructions injected into OpenCode’s system prompt.
 
 See `hosts/agent-box/README.md` for migration and adding new hosts.

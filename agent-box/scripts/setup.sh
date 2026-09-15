@@ -77,24 +77,13 @@ if [[ -f /etc/nixos/dotfiles/agent-box/AGENTS.md ]]; then
 fi
 
 # -----------------------------------------------------------------------------
-# Optional: Copy game workflow template
-# -----------------------------------------------------------------------------
-echo
-read -rp "Copy the game workflow template now? [Y/n] " COPY_GAME_WORKFLOW
-COPY_GAME_WORKFLOW=${COPY_GAME_WORKFLOW:-Y}
-
-if [[ "$COPY_GAME_WORKFLOW" =~ ^[Yy]$ ]]; then
-    echo "==> Copying game workflow template..."
-    mkdir -p /etc/nixos/dotfiles/agent-box/workflow
-    cp -r /etc/nixos/dotfiles/agent-box/templates/game /etc/nixos/dotfiles/agent-box/workflow/
-    chown -R agent:agent /etc/nixos/dotfiles/agent-box/workflow/game
-    echo "Copied. Enter it with: enter-workflow.sh game"
-fi
-
-# -----------------------------------------------------------------------------
 # Optional: Godot export templates
 # -----------------------------------------------------------------------------
 echo
+echo "The game workflow is available at /etc/nixos/dotfiles/agent-box/workflows/game"
+echo "Enter it with: enter-workflow.sh game"
+echo
+
 read -rp "Install Godot 4 export templates now? [Y/n] " INSTALL_TEMPLATES
 INSTALL_TEMPLATES=${INSTALL_TEMPLATES:-Y}
 

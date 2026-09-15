@@ -4,13 +4,12 @@
 set -euo pipefail
 
 WORKFLOW_NAME="${1:-}"
+WORKFLOW_DIR="/etc/nixos/dotfiles/agent-box/workflows/$WORKFLOW_NAME"
 
 if [[ -z "$WORKFLOW_NAME" ]]; then
     echo "Usage: $0 <workflow-name>" >&2
     exit 1
 fi
-
-WORKFLOW_DIR="/home/agent/workflow/$WORKFLOW_NAME"
 
 if [[ ! -d "$WORKFLOW_DIR" ]]; then
     echo "ERROR: Workflow '$WORKFLOW_NAME' not found at $WORKFLOW_DIR" >&2

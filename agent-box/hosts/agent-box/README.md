@@ -52,6 +52,7 @@ To move to a different VPS, create a new directory under `hosts/`, import
   ```bash
   enter-workflow.sh game
   ```
+  Workflows live in `/etc/nixos/dotfiles/agent-box/workflows/`.
 
 ## Migrating to a new VPS
 
@@ -78,6 +79,7 @@ To move to a different VPS, create a new directory under `hosts/`, import
 
 ## Workflows
 
-Create new workflows under `/home/agent/workflow/` using `new-workflow.sh`. Each
-workflow is a flake that can declare its own packages. Commit the workflow files
-in `/etc/nixos/dotfiles/agent-box/workflow/` with the rest of the repo.
+Create new workflows under `/etc/nixos/dotfiles/agent-box/workflows/` using
+`new-workflow.sh`. Each workflow is a flake that can declare its own packages.
+Workflow files live in the flake directory and are committed locally so Nix can
+see them; you do not need to push them to origin.
