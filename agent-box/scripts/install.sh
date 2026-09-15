@@ -29,7 +29,7 @@ REPO_DIR="/etc/nixos/dotfiles"
 FLAKE_DIR="/etc/nixos/dotfiles/agent-box"
 HOST_DIR="/etc/nixos/dotfiles/agent-box/hosts/agent-box"
 SCRIPT_PATH="/root/agent-box-install.sh"
-BASH_PROFILE="/root/.bash_profile"
+PHASE2_NIX="/etc/nixos/agent-box-phase2.nix"
 
 DRY_RUN=0
 AUTO_YES="${AUTO_YES:-0}"
@@ -114,20 +114,32 @@ persist_script() {
     chmod +x "$SCRIPT_PATH"
 }
 
-schedule_phase2() {
-    cat >> "$BASH_PROFILE" <<EOF
+write_phase2_service() {
+    cat > "$PHASE2_NIX" <<'EOF'
+{ ... }:
 
-# agent-box install phase 2 (auto-removed after run)
-if [[ -x "$SCRIPT_PATH" ]]; then
-    "$SCRIPT_PATH" phase2
-fi
-EOF
+{
+  systemd.services.agent-box-phase2 = {
+    description = "Agent Box phase 2 bootstrap";
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    wantedBy = [ "multi-user.target" ];
+
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "/root/agent-box-install.sh phase2";
+      StandardOutput = "journal";
+      StandardError = "journal";
+    };
+
+    unitConfig = {
+      ConditionPathExists = "/root/agent-box-install.sh";
+    };
+  };
 }
-
-remove_phase2_hook() {
-    if [[ -f "$BASH_PROFILE" ]]; then
-        sed -i "\|# agent-box install phase 2|,/fi/d" "$BASH_PROFILE" || true
-    fi
+EOF
+    echo "==> Wrote phase 2 systemd trigger to $PHASE2_NIX"
 }
 
 ensure_git_identity() {
@@ -231,7 +243,7 @@ print_plan() {
     echo "Plan:"
     echo "  - run nixos-infect with NIX_CHANNEL=${detected_channel:-<nixos-infect default>}"
     echo "  - reboot"
-    echo "  - on next root login, automatically:"
+    echo "  - on first boot, a systemd one-shot service will automatically:"
     echo "      - clone $REPO_URL to $REPO_DIR"
     echo "      - generate hardware configuration"
     echo "      - lock flake inputs into $FLAKE_DIR/flake.lock"
@@ -279,18 +291,18 @@ phase1() {
         export NO_SWAP=1
     fi
 
-    echo "==> Running nixos-infect..."
-    curl https://raw.githubusercontent.com/elitak/nixos-infect/master/nixos-infect \
-        | NIX_CHANNEL="$NIX_CHANNEL" bash -x 2>&1 | tee /tmp/nixos-infect.log
-
     echo "==> Persisting installer for phase 2..."
     persist_script
-    schedule_phase2
+    write_phase2_service
+
+    echo "==> Running nixos-infect..."
+    curl https://raw.githubusercontent.com/elitak/nixos-infect/master/nixos-infect \
+        | NIX_CHANNEL="$NIX_CHANNEL" NIXOS_IMPORT="$PHASE2_NIX" bash -x 2>&1 | tee /tmp/nixos-infect.log
 
     echo
     echo "============================================================"
     echo " Phase 1 complete. Rebooting into NixOS."
-    echo " After reboot, SSH back in as root to continue."
+    echo " Phase 2 will run automatically on first boot via systemd."
     echo "============================================================"
     reboot
 }
@@ -300,8 +312,6 @@ phase2() {
     echo " Agent Box Installer - Phase 2: Bootstrap"
     echo "============================================================"
     echo
-
-    remove_phase2_hook
 
     if [[ -d "$REPO_DIR" ]]; then
         echo "==> $REPO_DIR already exists. Skipping clone."
@@ -347,7 +357,9 @@ phase2() {
     echo "==> Rebuilding with root SSH disabled..."
     nix-shell -p git --run "nixos-rebuild switch --flake $FLAKE_DIR#agent-box"
 
+    echo "==> Cleaning up bootstrap triggers..."
     rm -f "$SCRIPT_PATH"
+    rm -f "$PHASE2_NIX"
 
     echo
     echo "============================================================"
