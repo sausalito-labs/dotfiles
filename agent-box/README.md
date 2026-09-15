@@ -134,7 +134,7 @@ to back them up.
 - `hosts/agent-box/` — machine-specific config for the current VPS.
 - `scripts/install.sh` — one-shot installer.
 - `scripts/setup.sh` — interactive first-boot setup (called by installer).
-- `templates/workflow/` — workflow templates.
+- `templates/` — workflow templates.
 - `workflow/` — runtime workflows.
 - `AGENTS.md` — instructions injected into OpenCode’s system prompt.
 

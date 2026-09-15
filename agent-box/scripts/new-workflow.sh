@@ -9,11 +9,11 @@ TEMPLATE_NAME="${2:-template}"
 if [[ -z "$WORKFLOW_NAME" ]]; then
     echo "Usage: $0 <workflow-name> [template-name]" >&2
     echo "Available templates:" >&2
-    ls -1 /etc/nixos/dotfiles/agent-box/templates/workflow/ >&2
+    ls -1 /etc/nixos/dotfiles/agent-box/templates/ >&2
     exit 1
 fi
 
-TEMPLATE_DIR="/etc/nixos/dotfiles/agent-box/templates/workflow/$TEMPLATE_NAME"
+TEMPLATE_DIR="/etc/nixos/dotfiles/agent-box/templates/$TEMPLATE_NAME"
 TARGET_DIR="/etc/nixos/dotfiles/agent-box/workflow/$WORKFLOW_NAME"
 
 if [[ ! -d "$TEMPLATE_DIR" ]]; then

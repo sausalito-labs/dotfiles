@@ -86,7 +86,7 @@ COPY_GAME_WORKFLOW=${COPY_GAME_WORKFLOW:-Y}
 if [[ "$COPY_GAME_WORKFLOW" =~ ^[Yy]$ ]]; then
     echo "==> Copying game workflow template..."
     mkdir -p /etc/nixos/dotfiles/agent-box/workflow
-    cp -r /etc/nixos/dotfiles/agent-box/templates/workflow/game /etc/nixos/dotfiles/agent-box/workflow/
+    cp -r /etc/nixos/dotfiles/agent-box/templates/game /etc/nixos/dotfiles/agent-box/workflow/
     chown -R agent:agent /etc/nixos/dotfiles/agent-box/workflow/game
     echo "Copied. Enter it with: enter-workflow.sh game"
 fi

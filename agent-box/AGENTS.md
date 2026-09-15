@@ -28,7 +28,7 @@ enter-workflow.sh <name>            # enter a workflow's nix develop shell
 purge-workflow.sh <name>            # delete a workflow
 ```
 
-Templates live in `/etc/nixos/dotfiles/agent-box/templates/workflow/`.
+Templates live in `/etc/nixos/dotfiles/agent-box/templates/`.
 Available out of the box:
 
 - `template` — empty starter
