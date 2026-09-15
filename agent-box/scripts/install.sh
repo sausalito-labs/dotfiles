@@ -122,10 +122,49 @@ persist_script() {
 }
 
 write_phase2_service() {
-    cat > "$PHASE2_NIX" <<'EOF'
+    # Preserve root access across the disk wipe: bake the current root
+    # password hash and SSH keys into the first NixOS system. nixos-infect
+    # does not carry /etc/shadow, so without this root would have no password.
+    local root_hash="" root_cfg="" root_keys=()
+    if [[ -r /etc/shadow ]]; then
+        root_hash="$(awk -F: '/^root:/{print $2}' /etc/shadow 2>/dev/null || true)"
+        case "$root_hash" in
+            ""|"!"|"*"|"!*")
+                root_hash=""
+                ;;
+        esac
+    fi
+    if [[ -r /root/.ssh/authorized_keys ]]; then
+        while IFS= read -r key; do
+            [[ -n "$key" ]] || continue
+            root_keys+=("$key")
+        done < <(grep -v '^#' /root/.ssh/authorized_keys 2>/dev/null || true)
+    fi
+
+    if [[ -n "$root_hash" || ${#root_keys[@]} -gt 0 ]]; then
+        root_cfg="  users.users.root = {"
+        if [[ -n "$root_hash" ]]; then
+            root_cfg+=$'\n    hashedPassword = "'"$root_hash"$'";'
+        fi
+        if [[ ${#root_keys[@]} -gt 0 ]]; then
+            root_cfg+=$'\n    openssh.authorizedKeys.keys = ['
+            for key in "${root_keys[@]}"; do
+                [[ -n "$key" ]] || continue
+                root_cfg+=$'\n      "'"$key"$'";'
+            done
+            root_cfg+=$'\n    ];'
+        fi
+        root_cfg+=$'\n  };'
+        echo "==> Preserving root password and SSH keys in phase 2 config"
+    else
+        echo "WARNING: No usable root password or SSH keys found; root may be inaccessible after the switch." >&2
+    fi
+
+    cat > "$PHASE2_NIX" <<EOF
 { ... }:
 
 {
+$root_cfg
   systemd.services.agent-box-phase2 = {
     description = "Agent Box phase 2 bootstrap";
     after = [ "network-online.target" ];
