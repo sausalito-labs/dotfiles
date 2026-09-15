@@ -346,16 +346,22 @@ phase2() {
     echo "==> Applying initial NixOS configuration..."
     nix-shell -p git --run "nixos-rebuild switch --flake $FLAKE_DIR#agent-box"
 
-    echo "==> Running interactive setup..."
-    "$FLAKE_DIR/scripts/setup.sh"
+    if [[ -t 0 ]]; then
+        echo "==> Running interactive setup..."
+        "$FLAKE_DIR/scripts/setup.sh"
 
-    echo "==> Disabling root SSH..."
-    disable_root_ssh
-    git -C "$REPO_DIR" add -A
-    git -C "$REPO_DIR" commit -m "agent-box: disable root SSH after setup"
+        echo "==> Disabling root SSH..."
+        disable_root_ssh
+        git -C "$REPO_DIR" add -A
+        git -C "$REPO_DIR" commit -m "agent-box: disable root SSH after setup"
 
-    echo "==> Rebuilding with root SSH disabled..."
-    nix-shell -p git --run "nixos-rebuild switch --flake $FLAKE_DIR#agent-box"
+        echo "==> Rebuilding with root SSH disabled..."
+        nix-shell -p git --run "nixos-rebuild switch --flake $FLAKE_DIR#agent-box"
+    else
+        echo "==> Running under systemd without a TTY; skipping interactive setup."
+        echo "    Root SSH remains enabled. After this bootstrap finishes, log in as root and run:"
+        echo "      $FLAKE_DIR/scripts/setup.sh"
+    fi
 
     echo "==> Cleaning up bootstrap triggers..."
     rm -f "$SCRIPT_PATH"

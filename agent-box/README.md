@@ -104,20 +104,23 @@ workflow files. You do **not** need to push anything to GitHub.
    ```bash
    curl -fsSL https://raw.githubusercontent.com/sausalito-labs/dotfiles/master/agent-box/scripts/install.sh | bash
    ```
-3. Wait for the reboot, then SSH as root again. Phase 2 finishes automatically.
-4. When it prints `Setup complete`, log in as `agent`:
+3. Confirm the wipe and wait for the reboot. Phase 2 starts automatically on
+   first boot via a systemd one-shot service.
+4. SSH as root again and run the interactive setup:
+   ```bash
+   /etc/nixos/dotfiles/agent-box/scripts/setup.sh
+   ```
+5. When setup finishes, root SSH is disabled. Log in as `agent`:
    ```bash
    ssh agent@<your-server-ip>
    ```
 
 The installer will:
-- Install the latest stable NixOS channel via `nixos-infect`.
-- Reboot.
-- Clone this repo to `/etc/nixos/dotfiles`.
-- Generate a hardware configuration.
-- Lock flake inputs into `flake.lock` for reproducible builds.
-- Apply the agent box NixOS config.
-- Prompt for Tailscale, OpenCode, and agent password.
+- Install NixOS via `nixos-infect` and reboot.
+- On first boot, a systemd service clones this repo to `/etc/nixos/dotfiles`,
+  generates a hardware configuration, locks flake inputs into `flake.lock`,
+  and applies the agent box NixOS config.
+- Interactive setup then prompts for Tailscale, OpenCode, and agent password.
 - Link `agent-box/AGENTS.md` into OpenCode's system prompt.
 - Disable root SSH and rebuild.
 
