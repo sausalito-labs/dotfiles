@@ -2,6 +2,9 @@
 
 Declarative NixOS configuration for the VPS that runs OpenCode.
 
+For the normal bootstrap, use `../scripts/install.sh`. This README covers
+architecture, migration, and adding new hosts.
+
 ## Architecture
 
 This flake is split into **generic** and **machine-specific** parts:
@@ -26,60 +29,11 @@ To move to a different VPS, create a new directory under `hosts/`, import
 - systemd services run OpenCode.
 - Only SSH (port 22) is public; OpenCode is tailnet-only.
 
-## One-time bootstrap (after NixOS install)
-
-1. **Install NixOS** on the VPS.
-   - **Recommended:** use `nixos-infect` on the running Debian host.
-     This wipes the entire disk and converts it to NixOS
-     without uploading an ISO:
-      ```bash
-      curl https://raw.githubusercontent.com/elitak/nixos-infect/master/nixos-infect \
-        | NIX_CHANNEL=nixos-24.11 bash -x 2>&1 | tee /tmp/nixos-infect.log
-      ```
-     Wait for the reboot, then SSH back in as `root`.
-   - **Alternative:** boot the NixOS minimal ISO, then:
-      ```bash
-      sudo nixos-generate-config --root /mnt
-      # copy this flake to /mnt/etc/nixos
-      sudo nixos-install --flake /mnt/etc/nixos/agent-box#agent-box
-      reboot
-      ```
-
-2. **Add your SSH key** to `hosts/agent-box/configuration.nix` if you want
-   key-based auth:
-   ```nix
-   users.users.agent.openssh.authorizedKeys.keys = [
-     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... your@email"
-   ];
-   ```
-
-3. **Apply the config** from the live system:
-   ```bash
-   sudo nixos-rebuild switch --flake /etc/nixos/agent-box#agent-box
-   ```
-
-4. **Run the interactive setup script as root:**
-   ```bash
-   sudo /etc/nixos/agent-box/scripts/setup.sh
-   ```
-   It will prompt for:
-   - Tailscale/Headscale auth key
-   - GitHub personal access token
-   - OpenCode API key
-   - OpenCode web UI password
-   - Password for the `agent` user
-
-   Then it optionally copies the `game` environment template and installs Godot
-   export templates.
-
-5. **Verify agent SSH login**, then disable root SSH in
-   `hosts/agent-box/configuration.nix` and rebuild.
-
 ## Daily usage
 
 - Rebuild the system after editing the config:
   ```bash
-  sudo nixos-rebuild switch --flake /etc/nixos/agent-box#agent-box
+  sudo nixos-rebuild switch --flake /etc/nixos/dotfiles/agent-box#agent-box
   ```
 
 - Access OpenCode web UI from any device on the tailnet:
@@ -101,16 +55,16 @@ To move to a different VPS, create a new directory under `hosts/`, import
 
 ## Migrating to a new VPS
 
-1. Copy `/etc/nixos` (this flake) to the new machine.
+1. Copy `/etc/nixos/dotfiles` (this repo) to the new machine.
 2. Create a new host directory, e.g. `hosts/new-vps/`:
    ```bash
-   mkdir -p /etc/nixos/agent-box/hosts/new-vps
+   mkdir -p /etc/nixos/dotfiles/agent-box/hosts/new-vps
    ```
 3. Copy `hosts/agent-box/configuration.nix` as a template and adjust hostname,
    disk device, and SSH key.
 4. Generate hardware config:
    ```bash
-   sudo nixos-generate-config --show-hardware-config > /etc/nixos/agent-box/hosts/new-vps/hardware-configuration.nix
+   sudo nixos-generate-config --show-hardware-config > /etc/nixos/dotfiles/agent-box/hosts/new-vps/hardware-configuration.nix
    ```
 5. Add the new host to `flake.nix`:
    ```nix
@@ -119,11 +73,11 @@ To move to a different VPS, create a new directory under `hosts/`, import
      modules = [ ./hosts/new-vps/configuration.nix ];
    };
    ```
-6. Run `sudo nixos-install --flake /etc/nixos/agent-box#new-vps` and reboot.
-7. Re-run `/etc/nixos/agent-box/scripts/setup.sh` on the new machine.
+6. Run `sudo nixos-install --flake /etc/nixos/dotfiles/agent-box#new-vps` and reboot.
+7. Re-run `/etc/nixos/dotfiles/agent-box/scripts/setup.sh` on the new machine.
 
 ## Asset generation pipeline
 
 Create new environments under `/home/agent/envs/` using `new-env.sh`. Each
 environment is a flake that can declare its own packages. Commit the env files
-in `/etc/nixos/agent-box/agent/envs/` with the rest of the system config.
+in `/etc/nixos/dotfiles/agent-box/agent/envs/` with the rest of the repo.

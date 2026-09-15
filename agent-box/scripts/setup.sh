@@ -10,7 +10,7 @@ SECRETS_DIR="/var/lib/agent-setup"
 SECRETS_FILE="$SECRETS_DIR/secrets.env"
 
 if [[ "$EUID" -ne 0 ]]; then
-    echo "ERROR: Run this script as root (e.g., sudo /etc/nixos/agent-box/scripts/setup.sh)" >&2
+    echo "ERROR: Run this script as root (e.g., sudo /etc/nixos/dotfiles/agent-box/scripts/setup.sh)" >&2
     exit 1
 fi
 
@@ -61,7 +61,7 @@ chmod 600 /var/lib/opencode/opencode.env
 # -----------------------------------------------------------------------------
 # Run the automated auth setup
 # -----------------------------------------------------------------------------
-/etc/nixos/agent-box/scripts/setup-secrets.sh
+/etc/nixos/dotfiles/agent-box/scripts/setup-secrets.sh
 
 # Make sure the OpenCode service sees the new secrets.
 systemctl restart opencode
@@ -75,9 +75,9 @@ COPY_GAME_ENV=${COPY_GAME_ENV:-Y}
 
 if [[ "$COPY_GAME_ENV" =~ ^[Yy]$ ]]; then
     echo "==> Copying game environment template..."
-    mkdir -p /etc/nixos/agent-box/agent/envs
-    cp -r /etc/nixos/agent-box/templates/envs/game /etc/nixos/agent-box/agent/envs/
-    chown -R agent:agent /etc/nixos/agent-box/agent/envs/game
+    mkdir -p /etc/nixos/dotfiles/agent-box/agent/envs
+    cp -r /etc/nixos/dotfiles/agent-box/templates/envs/game /etc/nixos/dotfiles/agent-box/agent/envs/
+    chown -R agent:agent /etc/nixos/dotfiles/agent-box/agent/envs/game
     echo "Copied. Enter it with: enter-env.sh game"
 fi
 
