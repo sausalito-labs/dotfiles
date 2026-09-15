@@ -2,10 +2,12 @@
 
 Declarative system configuration, organized by environment.
 
-- `gamedev/` — NixOS config for a headless gamedev box (OpenCode, Godot,
-  Tailscale/Headscale, One Arcade demo server).
-  - `modules/gamedev-box.nix` — reusable, vendor-agnostic NixOS module.
-  - `hosts/netcup/` — machine-specific config for the current netcup VPS.
+- `agent-box/` — NixOS config for an agent box (OpenCode, Tailscale/Headscale,
+  SSH, agent workspaces).
+  - `modules/agent.nix` — reusable, vendor-agnostic NixOS module.
+  - `hosts/agent-box/` — machine-specific config for the current VPS.
   - `scripts/setup.sh` — interactive first-boot setup.
+  - `templates/envs/` — workspace environment templates.
 
-See `gamedev/hosts/netcup/README.md` for the full migration and daily-use guide.
+See `agent-box/hosts/agent-box/README.md` for the full bootstrap, migration,
+and daily-use guide.

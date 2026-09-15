@@ -10,7 +10,7 @@ if [[ -z "$ENV_NAME" ]]; then
     exit 1
 fi
 
-ENV_DIR="/etc/nixos/gamedev/agent/envs/$ENV_NAME"
+ENV_DIR="/etc/nixos/agent-box/agent/envs/$ENV_NAME"
 
 if [[ ! -d "$ENV_DIR" ]]; then
     echo "ERROR: Environment '$ENV_NAME' not found at $ENV_DIR" >&2

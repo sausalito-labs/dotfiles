@@ -1,4 +1,4 @@
-# gamedev
+# Agent Box
 
 NixOS flake for an agent box.
 
@@ -30,20 +30,20 @@ NixOS flake for an agent box.
 5. **Generate the hardware configuration and track it:**
    ```bash
    nixos-generate-config --show-hardware-config \
-     > /etc/nixos/gamedev/hosts/agent-box/hardware-configuration.nix
+     > /etc/nixos/agent-box/hosts/agent-box/hardware-configuration.nix
    git -C /etc/nixos add -A
    git -C /etc/nixos commit -m "agent-box initial config"
    ```
 
 6. **Apply the configuration.** `nixos-rebuild` also needs git available:
    ```bash
-   nix-shell -p git --run "nixos-rebuild switch --flake /etc/nixos/gamedev#agent-box"
+   nix-shell -p git --run "nixos-rebuild switch --flake /etc/nixos/agent-box#agent-box"
    ```
    This first rebuild leaves root SSH enabled so you can run setup.
 
 7. **Run the interactive setup script as root:**
    ```bash
-   /etc/nixos/gamedev/scripts/setup.sh
+   /etc/nixos/agent-box/scripts/setup.sh
    ```
    It will prompt for:
    - Tailscale/Headscale auth key
@@ -61,17 +61,14 @@ NixOS flake for an agent box.
    ```
 
 9. **Disable root SSH and rebuild.** Edit
-   `/etc/nixos/gamedev/hosts/agent-box/configuration.nix` and change:
+   `/etc/nixos/agent-box/hosts/agent-box/configuration.nix` and change:
    ```nix
    services.openssh.settings.PermitRootLogin = "no";
    ```
    Then:
    ```bash
-   nix-shell -p git --run "nixos-rebuild switch --flake /etc/nixos/gamedev#agent-box"
+   nix-shell -p git --run "nixos-rebuild switch --flake /etc/nixos/agent-box#agent-box"
    ```
-
-10. **Clone your game repo** (e.g., `one-arcade`) into `/home/agent/`, build
-    the demo, and the `one-arcade-demo` systemd service will serve it.
 
 ## Structure
 
@@ -104,5 +101,5 @@ purge-env.sh my-webpage
 ```
 
 Edit `/home/agent/envs/<name>/flake.nix` to add or remove packages. Changes are
-stored under `/etc/nixos/gamedev/agent/envs/`, so commit them with the system
+stored under `/etc/nixos/agent-box/agent/envs/`, so commit them with the system
 config to back them up.

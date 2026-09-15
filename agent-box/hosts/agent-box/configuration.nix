@@ -16,7 +16,7 @@
 
   boot.loader.grub = {
     enable = true;
-    # Netcup VPSes usually expose the disk as /dev/sda. Verify with `lsblk`
+    # VPSes usually expose the disk as /dev/sda. Verify with `lsblk`
     # before running nixos-install and adjust if needed.
     device = lib.mkDefault "/dev/sda";
     configurationLimit = 10;

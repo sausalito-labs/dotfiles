@@ -1,14 +1,13 @@
 # Agent Box
 
-Declarative NixOS configuration for the VPS that runs OpenCode and the One
-Arcade web demo.
+Declarative NixOS configuration for the VPS that runs OpenCode.
 
 ## Architecture
 
 This flake is split into **generic** and **machine-specific** parts:
 
 - `modules/agent.nix` — vendor-agnostic module with the agent user, OpenCode
-  service, Tailscale, firewall, and the One Arcade demo service.
+  service, Tailscale, and firewall.
 - `hosts/agent-box/configuration.nix` — only machine-specific bits: hostname,
   disk device, and the SSH key used for initial access.
 - `hosts/agent-box/hardware-configuration.nix` — generated on the target machine
@@ -24,8 +23,8 @@ To move to a different VPS, create a new directory under `hosts/`, import
 - `modules/agent.nix` defines the shared agent environment.
 - `hosts/agent-box/configuration.nix` adds only hostname, disk, and SSH key.
 - `nixos-rebuild switch` applies the entire system state.
-- systemd services run OpenCode and the One Arcade demo server.
-- Only SSH (port 22) is public; OpenCode and the demo are tailnet-only.
+- systemd services run OpenCode.
+- Only SSH (port 22) is public; OpenCode is tailnet-only.
 
 ## One-time bootstrap (after NixOS install)
 
@@ -42,7 +41,7 @@ To move to a different VPS, create a new directory under `hosts/`, import
       ```bash
       sudo nixos-generate-config --root /mnt
       # copy this flake to /mnt/etc/nixos
-      sudo nixos-install --flake /mnt/etc/nixos/gamedev#agent-box
+      sudo nixos-install --flake /mnt/etc/nixos/agent-box#agent-box
       reboot
       ```
 
@@ -56,12 +55,12 @@ To move to a different VPS, create a new directory under `hosts/`, import
 
 3. **Apply the config** from the live system:
    ```bash
-   sudo nixos-rebuild switch --flake /etc/nixos/gamedev#agent-box
+   sudo nixos-rebuild switch --flake /etc/nixos/agent-box#agent-box
    ```
 
 4. **Run the interactive setup script as root:**
    ```bash
-   sudo /etc/nixos/gamedev/scripts/setup.sh
+   sudo /etc/nixos/agent-box/scripts/setup.sh
    ```
    It will prompt for:
    - Tailscale/Headscale auth key
@@ -80,7 +79,7 @@ To move to a different VPS, create a new directory under `hosts/`, import
 
 - Rebuild the system after editing the config:
   ```bash
-  sudo nixos-rebuild switch --flake /etc/nixos/gamedev#agent-box
+  sudo nixos-rebuild switch --flake /etc/nixos/agent-box#agent-box
   ```
 
 - Access OpenCode web UI from any device on the tailnet:
@@ -88,11 +87,6 @@ To move to a different VPS, create a new directory under `hosts/`, import
   http://agent-box:4096
   # or
   http://<tailscale-ip>:4096
-  ```
-
-- Access the One Arcade demo from the tailnet:
-  ```
-  https://agent-box:8765/
   ```
 
 - Attach to the persistent tmux session:
@@ -110,13 +104,13 @@ To move to a different VPS, create a new directory under `hosts/`, import
 1. Copy `/etc/nixos` (this flake) to the new machine.
 2. Create a new host directory, e.g. `hosts/new-vps/`:
    ```bash
-   mkdir -p /etc/nixos/gamedev/hosts/new-vps
+   mkdir -p /etc/nixos/agent-box/hosts/new-vps
    ```
 3. Copy `hosts/agent-box/configuration.nix` as a template and adjust hostname,
    disk device, and SSH key.
 4. Generate hardware config:
    ```bash
-   sudo nixos-generate-config --show-hardware-config > /etc/nixos/gamedev/hosts/new-vps/hardware-configuration.nix
+   sudo nixos-generate-config --show-hardware-config > /etc/nixos/agent-box/hosts/new-vps/hardware-configuration.nix
    ```
 5. Add the new host to `flake.nix`:
    ```nix
@@ -125,11 +119,11 @@ To move to a different VPS, create a new directory under `hosts/`, import
      modules = [ ./hosts/new-vps/configuration.nix ];
    };
    ```
-6. Run `sudo nixos-install --flake /etc/nixos/gamedev#new-vps` and reboot.
-7. Re-run `/etc/nixos/gamedev/scripts/setup.sh` on the new machine.
+6. Run `sudo nixos-install --flake /etc/nixos/agent-box#new-vps` and reboot.
+7. Re-run `/etc/nixos/agent-box/scripts/setup.sh` on the new machine.
 
 ## Asset generation pipeline
 
 Create new environments under `/home/agent/envs/` using `new-env.sh`. Each
 environment is a flake that can declare its own packages. Commit the env files
-in `/etc/nixos/gamedev/agent/envs/` with the rest of the system config.
+in `/etc/nixos/agent-box/agent/envs/` with the rest of the system config.

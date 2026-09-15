@@ -1,9 +1,9 @@
 # Generic NixOS module for an agent box.
 #
 # This module is vendor-agnostic: it sets up the agent user, OpenCode,
-# Tailscale, SSH, and the One Arcade demo server. It does NOT include any
-# hardware-specific configuration, so a host file must import this module and
-# provide a generated hardware-configuration.nix.
+# Tailscale, and SSH. It does NOT include any hardware-specific configuration,
+# so a host file must import this module and provide a generated
+# hardware-configuration.nix.
 
 { config, pkgs, lib, ... }:
 
@@ -100,15 +100,15 @@ in
   ];
 
   # Make Godot export templates and OpenCode state directories discoverable.
-  # Agent environments live under /etc/nixos/gamedev/agent/envs and are
+  # Agent environments live under /etc/nixos/agent-box/agent/envs and are
   # symlinked into /home/agent/envs for convenience.
   systemd.tmpfiles.rules = [
     "d /home/agent/.local/share/godot/export_templates 0755 agent agent -"
     "d /var/lib/opencode 0750 agent agent -"
     "d /home/agent/.config/opencode 0755 agent agent -"
     "d /home/agent/.local/share/opencode 0755 agent agent -"
-    "d /etc/nixos/gamedev/agent/envs 0755 agent agent -"
-    "L+ /home/agent/envs - - - - /etc/nixos/gamedev/agent/envs"
+    "d /etc/nixos/agent-box/agent/envs 0755 agent agent -"
+    "L+ /home/agent/envs - - - - /etc/nixos/agent-box/agent/envs"
   ];
 
   # ----------------------------------------------------------------------------
@@ -129,26 +129,6 @@ in
       Restart = "always";
       RestartSec = 5;
       EnvironmentFile = "/var/lib/opencode/opencode.env";
-    };
-  };
-
-  # ----------------------------------------------------------------------------
-  # One Arcade demo server (tailnet-only)
-  # ----------------------------------------------------------------------------
-  systemd.services.one-arcade-demo = {
-    description = "One Arcade HTML5 demo server";
-    after = [ "network-online.target" "tailscaled.service" ];
-    wants = [ "network-online.target" "tailscaled.service" ];
-    wantedBy = [ "multi-user.target" ];
-
-    serviceConfig = {
-      Type = "simple";
-      User = "agent";
-      Group = "agent";
-      WorkingDirectory = "/home/agent/one-arcade";
-      ExecStart = "${pkgs.python3}/bin/python3 scripts/serve_demo.py --host 0.0.0.0 --port 8765 --directory build/html5 --https true";
-      Restart = "always";
-      RestartSec = 10;
     };
   };
 
