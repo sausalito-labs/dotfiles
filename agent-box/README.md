@@ -23,6 +23,10 @@ NixOS flake for an agent box with workflows.
 The agent box keeps a small, stable base system and puts all project-specific
 tooling into **workflows**.
 
+On a fresh Debian or Ubuntu VPS, `scripts/install.sh` uses `nixos-infect` to
+replace the OS with NixOS before applying this flake. If you already have NixOS
+installed, the installer skips that step and runs only the bootstrap.
+
 - **Base system**: OpenCode, git, gh, tmux, curl, unzip, htop, python3, openssl,
   plus SSH, Tailscale, and firewall.
 - **Workflows**: per-project flakes under `/etc/nixos/dotfiles/agent-box/workflows/`.
