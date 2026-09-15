@@ -142,13 +142,6 @@ EOF
     echo "==> Wrote phase 2 systemd trigger to $PHASE2_NIX"
 }
 
-ensure_git_identity() {
-    if [[ -d "$REPO_DIR/.git" ]]; then
-        git -C "$REPO_DIR" config user.email >/dev/null 2>&1 || git -C "$REPO_DIR" config user.email "agent-box@localhost"
-        git -C "$REPO_DIR" config user.name >/dev/null 2>&1 || git -C "$REPO_DIR" config user.name "Agent Box"
-    fi
-}
-
 disable_root_ssh() {
     local config="$HOST_DIR/configuration.nix"
     if grep -q 'services.openssh.settings.PermitRootLogin = "yes";' "$config"; then
@@ -335,16 +328,18 @@ phase2() {
         echo "==> flake.lock already exists."
     fi
 
+    echo "==> Committing bootstrap changes..."
+    nix-shell -p git --run "
+        git -C \"$REPO_DIR\" config user.email >/dev/null 2>&1 || git -C \"$REPO_DIR\" config user.email \"agent-box@localhost\"
+        git -C \"$REPO_DIR\" config user.name >/dev/null 2>&1 || git -C \"$REPO_DIR\" config user.name \"Agent Box\"
+        if git -C \"$REPO_DIR\" status --short | grep -q .; then
+            git -C \"$REPO_DIR\" add -A
+            git -C \"$REPO_DIR\" commit -m \"agent-box: bootstrap\"
+        fi
+    "
+
     echo "==> Applying initial NixOS configuration..."
     nix-shell -p git --run "nixos-rebuild switch --flake $FLAKE_DIR#agent-box"
-
-    ensure_git_identity
-
-    if git -C "$REPO_DIR" status --short | grep -q .; then
-        echo "==> Committing bootstrap changes..."
-        git -C "$REPO_DIR" add -A
-        git -C "$REPO_DIR" commit -m "agent-box: bootstrap"
-    fi
 
     if [[ -t 0 ]]; then
         echo "==> Running interactive setup..."
