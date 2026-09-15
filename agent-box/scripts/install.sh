@@ -273,6 +273,12 @@ phase1() {
 
     NIX_CHANNEL="${NIX_CHANNEL:-$(get_latest_stable_channel)}"
     echo "==> Using NixOS channel: ${NIX_CHANNEL:-<nixos-infect default>}"
+
+    if mount | grep -q "on /tmp type tmpfs"; then
+        echo "==> /tmp is tmpfs; telling nixos-infect to skip its swap step"
+        export NO_SWAP=1
+    fi
+
     echo "==> Running nixos-infect..."
     curl https://raw.githubusercontent.com/elitak/nixos-infect/master/nixos-infect \
         | NIX_CHANNEL="$NIX_CHANNEL" bash -x 2>&1 | tee /tmp/nixos-infect.log
