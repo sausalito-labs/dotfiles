@@ -314,12 +314,8 @@ phase2() {
         nix-shell -p git --run "git clone $REPO_URL $REPO_DIR"
     fi
 
-    if [[ ! -f "$HOST_DIR/hardware-configuration.nix" ]]; then
-        echo "==> Generating hardware configuration..."
-        nixos-generate-config --show-hardware-config > "$HOST_DIR/hardware-configuration.nix"
-    else
-        echo "==> Hardware configuration already exists."
-    fi
+    echo "==> Regenerating hardware configuration..."
+    nixos-generate-config --show-hardware-config > "$HOST_DIR/hardware-configuration.nix"
 
     if [[ ! -f "$FLAKE_DIR/flake.lock" ]]; then
         echo "==> Locking flake inputs..."
