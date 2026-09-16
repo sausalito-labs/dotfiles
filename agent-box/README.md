@@ -75,6 +75,10 @@ your device:
   ```
 - Log in via the tailnet: `ssh agent@<node>`
 
+Project repos live in `/home/agent/projects` (agent-owned; the web service
+starts there). In the web UI, pick the folder for the repo you're working in —
+OpenCode is per-project, so each session loads the directory you choose.
+
 GitHub CLI is already authenticated by setup (device flow). Re-run it if needed:
 ```bash
 sudo -u agent gh auth login --hostname github.com --git-protocol https --web

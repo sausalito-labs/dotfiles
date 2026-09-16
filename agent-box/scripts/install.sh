@@ -198,11 +198,13 @@ export PATH="$HOME/.opencode/bin:$HOME/.nix-profile/bin:/nix/var/nix/profiles/de
 EOF
 
     step "Creating state directories..."
-    run mkdir -p "$AGENT_HOME/.config/opencode" \
+    run mkdir -p "$AGENT_HOME/projects" \
+        "$AGENT_HOME/.config/opencode" \
         "$AGENT_HOME/.local/share/opencode" \
         "$AGENT_HOME/.local/share/godot/export_templates" \
         /var/lib/opencode
-    run chown -R "$AGENT_USER:$AGENT_USER" "$AGENT_HOME/.config" "$AGENT_HOME/.local"
+    run chown -R "$AGENT_USER:$AGENT_USER" "$AGENT_HOME/projects" \
+        "$AGENT_HOME/.config" "$AGENT_HOME/.local"
     run chown "$AGENT_USER:$AGENT_USER" /var/lib/opencode
 }
 

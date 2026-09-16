@@ -114,13 +114,26 @@ chown agent:agent /home/agent/.config/opencode/opencode.json
 echo "==> Wrote ~/.config/opencode/opencode.json"
 
 # -----------------------------------------------------------------------------
+# Workspace
+# -----------------------------------------------------------------------------
+echo "==> Creating the workspace at $HOME_DIR/projects..."
+mkdir -p "$HOME_DIR/projects"
+chown "$USER:$USER" "$HOME_DIR/projects"
+
+# -----------------------------------------------------------------------------
 # Tailscale Funnel: public HTTPS URL for the web UI (no client installs)
 # -----------------------------------------------------------------------------
 echo "==> Exposing the OpenCode web UI via Tailscale Funnel (public HTTPS)..."
 FUNNEL_URL=""
-if tailscale funnel --bg 4096; then
-    FUNNEL_URL="$(tailscale funnel status 2>/dev/null | awk '/^https:\/\//{print $1; exit}')"
+FUNNEL_ENABLE_URL=""
+if FUNNEL_OUTPUT="$(tailscale funnel --bg 4096 2>&1)"; then
+    echo "$FUNNEL_OUTPUT"
+    FUNNEL_ENABLE_URL="$(printf '%s\n' "$FUNNEL_OUTPUT" \
+        | grep -oE 'https://login\.tailscale\.com/f/funnel\?\S+' | head -1 || true)"
+    FUNNEL_URL="$(tailscale funnel status 2>/dev/null \
+        | grep -oE 'https://[^ ]+\.ts\.net' | head -1 || true)"
 else
+    echo "$FUNNEL_OUTPUT"
     echo "    Warning: could not enable Funnel. Run it later with:"
     echo "    sudo tailscale funnel --bg 4096"
     echo "    (HTTPS must be enabled for the tailnet: https://login.tailscale.com/admin/dns)"
@@ -146,6 +159,16 @@ echo "Services:"
 systemctl status opencode --no-pager 2>/dev/null | head -5
 echo
 NODE_NAME="$(tailscale status 2>/dev/null | awk 'NR==1{print $2}')"
+echo
+echo "Workspace (~/projects):"
+echo "  /home/agent/projects  (create repos here, pick the folder in the web UI)"
+echo
+if [[ -n "$FUNNEL_ENABLE_URL" ]]; then
+    echo "IMPORTANT: Funnel needs a one-time tailnet approval. Open this link:"
+    echo "  $FUNNEL_ENABLE_URL"
+    echo "  Then reload the web UI below (cert takes ~30-60s to issue)."
+    echo
+fi
 if [[ -n "$FUNNEL_URL" ]]; then
     echo "OpenCode web UI (public, no install needed):"
     echo "  $FUNNEL_URL"

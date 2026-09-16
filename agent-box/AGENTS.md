@@ -137,6 +137,8 @@ After upgrading either, restart the web service:
 - `/opt/agent-box/` — this repo (clone of the dotfiles repo)
 - `/opt/agent-box/agent-box/` — the agent box config, packages, scripts
 - `/opt/agent-box/agent-box/workflows/` — workflows and templates
+- `/home/agent/projects/` — default workspace for project repos (the web
+  UI starts here; pick the folder for the repo you're working in)
 - `/home/agent/.config/opencode/AGENTS.md` — this file
 - `/var/lib/opencode/opencode.env` — OpenCode web UI secrets
 - `/var/lib/agent-setup/secrets.env` — Tailscale/OpenCode API secrets
