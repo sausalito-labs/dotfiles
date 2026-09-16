@@ -12,6 +12,7 @@ ExecStart=/home/agent/.opencode/bin/opencode web --port 4096 --hostname 0.0.0.0
 Restart=always
 RestartSec=5
 EnvironmentFile=/var/lib/opencode/opencode.env
+Environment="PATH=/home/agent/.opencode/bin:/home/agent/.nix-profile/bin:/nix/var/nix/profiles/default/bin:/opt/agent-box/agent-box/scripts:/usr/local/bin:/usr/bin:/bin"
 
 [Install]
 WantedBy=multi-user.target

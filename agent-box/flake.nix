@@ -8,14 +8,17 @@
 
   outputs = { self, nixpkgs }:
     let
-      system = "x86_64-linux";
-      pkgs = import nixpkgs { inherit system; };
+      forAllSystems = nixpkgs.lib.genAttrs [
+        "x86_64-linux"
+        "aarch64-linux"
+      ];
+      pkgsFor = system: import nixpkgs { inherit system; };
     in
     {
-      packages.${system} = rec {
-        toolchain = pkgs.buildEnv {
+      packages = forAllSystems (system: rec {
+        toolchain = (pkgsFor system).buildEnv {
           name = "agent-box-toolchain";
-          paths = with pkgs; [
+          paths = with pkgsFor system; [
             git
             gh
             tmux
@@ -27,10 +30,12 @@
           ];
         };
         default = toolchain;
-      };
+      });
 
-      devShells.${system}.default = pkgs.mkShell {
-        packages = [ self.packages.${system}.toolchain ];
-      };
+      devShells = forAllSystems (system: {
+        default = (pkgsFor system).mkShell {
+          packages = [ self.packages.${system}.toolchain ];
+        };
+      });
     };
 }

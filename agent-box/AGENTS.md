@@ -26,6 +26,16 @@ sudo -u agent opencode upgrade
 Add more tools with `nix profile install nixpkgs#<pkg>`, or by adding them to the
 `toolchain` package in `./flake.nix` and reinstalling the profile.
 
+The toolchain and Nix are on PATH everywhere, login shell or not:
+- login shells get it from `/etc/profile.d/agent-box.sh`;
+- the `opencode.service` unit sets the same PATH for non-login shells —
+  systemd contexts and the agent's own shell (`bash -c` never reads
+  `/etc/profile`).
+
+`git`, `gh`, `nix`, `enter-workflow.sh` etc. therefore resolve from any
+session the box provides. After a toolchain upgrade, restart `opencode`
+(`systemctl restart opencode`) so the unit's PATH reflects the new profile.
+
 ## When asked to install a tool
 
 1. If a relevant workflow already exists, edit that workflow's `flake.nix`.
@@ -46,6 +56,12 @@ These also serve as templates:
 - `template` — empty starter
 - `game` — Godot 4, Python 3, unzip, curl
 - `webpage` — Node.js, pnpm
+
+Every workflow keeps a committed `flake.lock` pinned to the same nixpkgs
+revision as the toolchain, so a box rebuilt from this repo reproduces the same
+tool versions. If you add or change an `inputs` entry in a workflow, re-lock it
+before committing (`nix flake lock` in the workflow's directory). New workflows
+copied by `new-workflow.sh` inherit the template's lock automatically.
 
 ### Godot export templates
 

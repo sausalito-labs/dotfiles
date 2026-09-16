@@ -193,8 +193,11 @@ ensure_agent_user() {
     echo "$AGENT_USER ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/agent-box
     chmod 440 /etc/sudoers.d/agent-box
 
+    # Login shells get the full toolchain PATH. The opencode.service unit sets
+    # the same PATH for non-login shells (systemd / the agent's own shell), so
+    # no symlink hackery in /usr/local/bin is needed anywhere.
     cat > /etc/profile.d/agent-box.sh <<'EOF'
-export PATH="$HOME/.opencode/bin:$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"
+export PATH="$HOME/.opencode/bin:$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:/opt/agent-box/agent-box/scripts:$PATH"
 EOF
 
     step "Creating state directories..."
@@ -317,6 +320,7 @@ if [[ "$DRY_RUN" == "1" ]]; then
     echo "  - Tailscale + ufw (allow ssh, trust tailscale0)"
     echo "  - nix profile for '$AGENT_USER': toolchain"
     echo "  - opencode (official installer, latest) to /home/agent/.opencode/bin"
+    echo "  - toolchain PATH in login shells (/etc/profile.d) and the opencode unit"
     echo "  - enable opencode.service (started by setup.sh)"
     echo "  - run interactive setup (setup.sh) when the install finishes"
     echo "  - hostname: agent-box"

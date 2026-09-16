@@ -7,17 +7,24 @@
 
   outputs = { self, nixpkgs, ... }:
     let
-      system = "x86_64-linux";
-      pkgs = nixpkgs.legacyPackages.${system};
+      forAllSystems = nixpkgs.lib.genAttrs [
+        "x86_64-linux"
+        "aarch64-linux"
+      ];
+      pkgsFor = system: nixpkgs.legacyPackages.${system};
     in
     {
-      devShells.default = pkgs.mkShell {
-        packages = with pkgs; [
-          godot_4
-          python3
-          unzip
-          curl
-        ];
-      };
+      devShells = forAllSystems (system:
+        let pkgs = pkgsFor system; in
+        {
+          default = pkgs.mkShell {
+            packages = with pkgs; [
+              godot_4
+              python3
+              unzip
+              curl
+            ];
+          };
+        });
     };
 }

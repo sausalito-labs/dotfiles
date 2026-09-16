@@ -32,6 +32,10 @@ OpenCode service secrets, completes a GitHub device-flow login, links `AGENTS.md
 into OpenCode's system prompt, and exposes the web UI over Tailscale Funnel as
 a public HTTPS URL (no client installs needed).
 
+The toolchain is on PATH everywhere without symlink tricks: login shells get it
+from `/etc/profile.d/agent-box.sh`, and the `opencode.service` unit sets the
+same PATH for non-login shells (systemd contexts and the agent's own shell).
+
 The pre-made workflows are also templates:
 
 - `template` — empty starter
@@ -131,10 +135,14 @@ curl ... | AUTO_YES=1 bash
 ## Structure
 
 - `flake.nix` — `packages.toolchain` (pinned nixpkgs).
-- `services/opencode.service` — OpenCode web UI systemd unit (agent user).
+- `flake.lock` — locked nixpkgs rev for the toolchain (committed).
+- `services/opencode.service` — OpenCode web UI systemd unit (agent user,
+  sets the toolchain PATH for non-login shells).
 - `scripts/install.sh` — one-command Debian/Nix installer.
 - `scripts/setup.sh` — interactive first-time setup (Tailscale, OpenCode, passwords).
 - `scripts/setup-secrets.sh` — applies secrets (Tailscale up, OpenCode auth).
-- `scripts/{new,enter,purge}-workflow.sh` — workflow helpers.
-- `workflows/` — per-project flakes (also serve as templates).
+- `scripts/{new,enter,purge}-workflow.sh` — workflow helpers (on PATH via the unit
+  and profile.d).
+- `workflows/` — per-project flakes with committed `flake.lock`, each pinned to the
+  same nixpkgs rev as the toolchain (also serve as templates).
 - `AGENTS.md` — instructions injected into OpenCode's system prompt.
