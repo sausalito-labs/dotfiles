@@ -171,13 +171,16 @@ $root_cfg
     wants = [ "network-online.target" ];
     wantedBy = [ "multi-user.target" ];
 
+    path = [ "/run/current-system/sw" ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
       # Self-healing trigger: re-fetch this installer at first boot instead of
       # relying on a copy surviving the reboot. Cache-Control busts stale CDN
       # copies. Runs once via /etc/agent-box-bootstrap-done.
-      ExecStart = ''/bin/sh -c 'if [ ! -e "$BOOTSTRAP_DONE" ]; then curl -fsSL -H "Cache-Control: no-cache" "$INSTALL_URL" -o /root/agent-box-install.sh && chmod +x /root/agent-box-install.sh && bash /root/agent-box-install.sh phase2; fi' '';
+      # Systemd services do not get /run/current-system/sw/bin on PATH, so use
+      # absolute store paths for the fetch and export PATH for the script run.
+      ExecStart = ''\${pkgs.bash}/bin/bash -c 'export PATH="/run/current-system/sw/bin:/run/current-system/sw/sbin:/usr/bin:/bin:/usr/sbin:/sbin"; if [ ! -e "$BOOTSTRAP_DONE" ]; then \${pkgs.curl}/bin/curl -fsSL -H "Cache-Control: no-cache" "$INSTALL_URL" -o /root/agent-box-install.sh && \${pkgs.bash}/bin/bash /root/agent-box-install.sh phase2; fi' '';
       Restart = "on-failure";
       RestartSec = "10s";
       StandardOutput = "journal";
@@ -373,18 +376,26 @@ phase2() {
     echo "============================================================"
     echo
 
+    # Systemd services do not inherit the NixOS login PATH or NIX_PATH. Make
+    # sure git/nix/nixos-rebuild/nixos-generate-config resolve regardless of
+    # how phase 2 is invoked.
+    export PATH="/run/current-system/sw/bin:/run/current-system/sw/sbin:$PATH"
+    if [[ -d /nix/var/nix/profiles/per-user/root/channels/nixos ]]; then
+        export NIX_PATH="nixpkgs=/nix/var/nix/profiles/per-user/root/channels/nixos${NIX_PATH:+:$NIX_PATH}"
+    fi
+
     if [[ -d "$REPO_DIR" ]]; then
         if [[ "$RESET_REPO" == "1" ]]; then
             echo "==> Resetting $REPO_DIR to origin/master..."
-            nix-shell -p git --run "git -C \"$REPO_DIR\" fetch origin"
-            nix-shell -p git --run "git -C \"$REPO_DIR\" reset --hard origin/master"
+            git -C "$REPO_DIR" fetch origin
+            git -C "$REPO_DIR" reset --hard origin/master
         else
             echo "==> $REPO_DIR already exists. Skipping clone."
         fi
     else
         echo "==> Backing up default /etc/nixos and cloning repo..."
         mv /etc/nixos /etc/nixos.bak
-        nix-shell -p git --run "git clone $REPO_URL $REPO_DIR"
+        git clone "$REPO_URL" "$REPO_DIR"
     fi
 
     echo "==> Regenerating hardware configuration..."
@@ -408,23 +419,21 @@ phase2() {
 
     if [[ ! -f "$FLAKE_DIR/flake.lock" ]]; then
         echo "==> Locking flake inputs..."
-        nix-shell -p git --run "nix --extra-experimental-features 'nix-command flakes' flake lock $FLAKE_DIR"
+        nix --extra-experimental-features "nix-command flakes" flake lock "$FLAKE_DIR"
     else
         echo "==> flake.lock already exists."
     fi
 
     echo "==> Committing bootstrap changes..."
-    nix-shell -p git --run "
-        git -C \"$REPO_DIR\" config user.email >/dev/null 2>&1 || git -C \"$REPO_DIR\" config user.email \"agent-box@localhost\"
-        git -C \"$REPO_DIR\" config user.name >/dev/null 2>&1 || git -C \"$REPO_DIR\" config user.name \"Agent Box\"
-        if git -C \"$REPO_DIR\" status --short | grep -q .; then
-            git -C \"$REPO_DIR\" add -A
-            git -C \"$REPO_DIR\" commit -m \"agent-box: bootstrap\"
-        fi
-    "
+    git -C "$REPO_DIR" config user.email >/dev/null 2>&1 || git -C "$REPO_DIR" config user.email "agent-box@localhost"
+    git -C "$REPO_DIR" config user.name >/dev/null 2>&1 || git -C "$REPO_DIR" config user.name "Agent Box"
+    if git -C "$REPO_DIR" status --short | grep -q .; then
+        git -C "$REPO_DIR" add -A
+        git -C "$REPO_DIR" commit -m "agent-box: bootstrap"
+    fi
 
     echo "==> Applying initial NixOS configuration..."
-    nix-shell -p git --run "nixos-rebuild switch --flake $FLAKE_DIR#agent-box"
+    nixos-rebuild switch --flake "$FLAKE_DIR#agent-box"
 
     if [[ -z "${INVOCATION_ID:-}" ]]; then
         echo "==> Running interactive setup..."
@@ -436,7 +445,7 @@ phase2() {
         git -C "$REPO_DIR" commit -m "agent-box: disable root SSH after setup"
 
         echo "==> Rebuilding with root SSH disabled..."
-        nix-shell -p git --run "nixos-rebuild switch --flake $FLAKE_DIR#agent-box"
+        nixos-rebuild switch --flake "$FLAKE_DIR#agent-box"
 
         echo
         echo "============================================================"
