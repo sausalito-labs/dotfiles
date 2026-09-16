@@ -114,7 +114,6 @@ This copies `workflows/template/` to `workflows/assets/`.
 ```bash
 curl ... | bash -s -- --yes         # skip the confirmation prompt
 curl ... | bash -s -- --dry-run     # print the plan, change nothing
-curl ... | bash -s -- --reset       # reset /opt/agent-box to origin/master first
 curl ... | AUTO_YES=1 bash
 ```
 

@@ -12,11 +12,10 @@
 # Options:
 #   --yes        Skip the confirmation prompt.
 #   --dry-run    Print what would happen and exit without changing anything.
-#   --reset      If the repo already exists, reset it to origin/master.
 
 set -euo pipefail
 
-REPO_URL="https://github.com/sausalito-labs/dotfiles.git"
+REPO_TARBALL_URL="https://github.com/sausalito-labs/dotfiles/archive/refs/heads/master.tar.gz"
 REPO_DIR="/opt/agent-box"
 AGENT_DIR="/opt/agent-box/agent-box"
 NIX_BIN="/nix/var/nix/profiles/default/bin/nix"
@@ -25,7 +24,6 @@ AGENT_HOME="/home/agent"
 
 DRY_RUN=0
 AUTO_YES="${AUTO_YES:-0}"
-RESET_REPO=0
 
 usage() {
     cat <<EOF
@@ -34,7 +32,6 @@ Usage: $0 [OPTIONS]
 Options:
   --dry-run    Print the plan and exit without making changes.
   --yes        Skip the confirmation prompt.
-  --reset      If the repo already exists, reset it to origin/master.
   -h, --help   Show this help message.
 EOF
 }
@@ -52,17 +49,13 @@ while [[ $# -gt 0 ]]; do
             AUTO_YES=1
             shift
             ;;
-        --reset)
-            RESET_REPO=1
-            shift
-            ;;
         -h|--help)
             usage
             exit 0
             ;;
         *)
             echo "Unknown option: $1" >&2
-            echo "Usage: $0 [--dry-run] [--yes] [--reset]" >&2
+            echo "Usage: $0 [--dry-run] [--yes]" >&2
             exit 1
             ;;
     esac
@@ -148,7 +141,6 @@ This installs Nix and the agent box on $(hostname) ($(get_ip)).
 It will add the '$AGENT_USER' user, install Nix, Tailscale, a firewall,
 and run the OpenCode web service. Your OS and root access are untouched.
 
-Continue? [y/N]
 EOF
     local answer=""
     read -rp "Continue? [y/N] " answer </dev/tty || true
@@ -159,9 +151,9 @@ EOF
 # Install steps
 # ---------------------------------------------------------------------------
 ensure_base_pkgs() {
-    step "Installing base packages (git, curl, ufw)..."
+    step "Installing base packages (curl, ufw)..."
     run apt-get update -y
-    run apt-get install -y git curl ca-certificates ufw
+    run apt-get install -y curl ufw
 
     if [[ "$(hostname)" != "agent-box" ]]; then
         step "Setting hostname to agent-box..."
@@ -215,22 +207,18 @@ EOF
 }
 
 ensure_repo() {
-    if [[ -d "$AGENT_DIR/.git" ]]; then
-        if [[ "$RESET_REPO" == "1" ]]; then
-            step "Resetting repo to origin/master..."
-            run git -C "$AGENT_DIR" fetch origin
-            run git -C "$AGENT_DIR" reset --hard origin/master
-        else
-            step "Repo already present at $AGENT_DIR"
-        fi
-    else
-        step "Cloning repo to $REPO_DIR..."
-        run git clone "$REPO_URL" "$REPO_DIR"
+    step "Fetching dotfiles to $REPO_DIR..."
+    local new_dir="${REPO_DIR}.new"
+    if [[ "$DRY_RUN" == "1" ]]; then
+        echo "    [dry-run] curl -fsSL $REPO_TARBALL_URL | tar -xzf - --strip-components=1 -C $new_dir"
+        return
     fi
-
-    step "Giving '$AGENT_USER' ownership of the repo..."
-    run git config --system --add safe.directory "$REPO_DIR"
-    run chown -R "$AGENT_USER:$AGENT_USER" "$REPO_DIR"
+    rm -rf "$new_dir" "$REPO_DIR"
+    mkdir -p "$new_dir"
+    curl -fsSL "$REPO_TARBALL_URL" \
+        | tar -xzf - --strip-components=1 -C "$new_dir"
+    mv "$new_dir" "$REPO_DIR"
+    chown -R "$AGENT_USER:$AGENT_USER" "$REPO_DIR"
 }
 
 ensure_tailscale() {
@@ -256,11 +244,9 @@ ensure_firewall() {
 install_profile() {
     step "Building and installing OpenCode + toolchain into '$AGENT_USER' Nix profile..."
     if [[ "$DRY_RUN" == "1" ]]; then
-        echo "    [dry-run] sudo -u agent git config --global --add safe.directory $REPO_DIR"
         echo "    [dry-run] sudo -u agent nix profile install $AGENT_DIR#opencode $AGENT_DIR#toolchain"
         return
     fi
-    sudo -u "$AGENT_USER" git config --global --add safe.directory "$REPO_DIR"
     sudo -u "$AGENT_USER" env \
         NIX_CONFIG="experimental-features = nix-command flakes" \
         "$NIX_BIN" profile install \
@@ -313,10 +299,10 @@ EOF
 # ---------------------------------------------------------------------------
 if [[ "$DRY_RUN" == "1" ]]; then
     echo "Plan: install multi-user Nix + agent box on this Debian/Ubuntu host."
-    echo "  - base packages: git, curl, ufw"
+    echo "  - base packages: curl, ufw"
     echo "  - Determinate Nix (multi-user, flakes enabled)"
     echo "  - user '$AGENT_USER' (sudo, NOPASSWD, nix-users)"
-    echo "  - clone $REPO_URL to $REPO_DIR"
+    echo "  - fetch dotfiles (master tarball) to $REPO_DIR"
     echo "  - Tailscale + ufw (allow ssh, trust tailscale0)"
     echo "  - nix profile for '$AGENT_USER': opencode + toolchain"
     echo "  - enable opencode.service (started by setup.sh)"

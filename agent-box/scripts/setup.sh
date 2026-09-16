@@ -103,20 +103,7 @@ echo
 echo "The game workflow is available at /opt/agent-box/agent-box/workflows/game"
 echo "Enter it with: enter-workflow.sh game"
 echo
-
-read -rp "Install Godot 4 export templates now? [Y/n] " INSTALL_TEMPLATES </dev/tty
-INSTALL_TEMPLATES=${INSTALL_TEMPLATES:-Y}
-
-if [[ "$INSTALL_TEMPLATES" =~ ^[Yy]$ ]]; then
-    echo "==> Installing Godot export templates..."
-    sudo -u "$USER" mkdir -p "$HOME_DIR/.local/share/godot/export_templates"
-    sudo -u "$USER" bash -c '
-        cd ~/.local/share/godot/export_templates
-        curl -LO https://downloads.tuxfamily.org/godotengine/4.3/Godot_v4.3-stable_export_templates.tpz
-        unzip -o Godot_v4.3-stable_export_templates.tpz
-        mv -f 4.3 4.3.stable
-    '
-fi
+echo "Godot export templates are installed on demand by the agent (see AGENTS.md)."
 
 echo
 echo "============================================================"

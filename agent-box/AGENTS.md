@@ -40,6 +40,20 @@ These also serve as templates:
 - `game` — Godot 4, Python 3, unzip, curl
 - `webpage` — Node.js, pnpm
 
+### Godot export templates
+
+Exporting a game build needs the export templates for the pinned Godot version.
+They are ~300 MB and only used at export time, so install them on demand (as
+the agent user, whose PATH includes the toolchain):
+
+    mkdir -p ~/.local/share/godot/export_templates
+    cd ~/.local/share/godot/export_templates
+    curl -fLo Godot_v4.3-stable_export_templates.tpz \
+        https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz
+    test -s Godot_v4.3-stable_export_templates.tpz
+    unzip -o Godot_v4.3-stable_export_templates.tpz
+    mv -f 4.3 4.3.stable
+
 ### Workflow commands
 
 ```bash
