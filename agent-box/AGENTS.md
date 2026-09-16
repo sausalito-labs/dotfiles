@@ -85,14 +85,10 @@ When you need a new tool:
    enter-workflow.sh <name>
    ```
 
-5. Commit the workflow locally if you want it backed up:
-   ```bash
-   git -C /opt/agent-box add agent-box/workflows/<name>
-   git -C /opt/agent-box commit -m "add <tool> to <name> workflow"
-   ```
-
-   Nix does not require this commit for `nix develop` to work. You do not need
-   to push it to GitHub.
+5. Commit the workflow to the dotfiles repo on GitHub to keep it backed up.
+   The local copy is replaced on every reinstall, so anything not committed
+   upstream disappears. Nix does not require a commit for `nix develop` to
+   work.
 
 ### Cleanup
 
@@ -106,9 +102,9 @@ nix-collect-garbage -d
 
 ## Committing changes
 
-When you make changes to workflows or other files, only commit files you
-actually edited. Do **not** commit machine-generated files such as
-`flake.lock`.
+When you make changes to workflows, commit them to the dotfiles repo on GitHub
+to keep them backed up; the local tree has no git metadata and gets replaced
+on reinstall.
 
 ## Updating the agent environment
 

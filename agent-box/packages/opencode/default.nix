@@ -3,11 +3,11 @@
 
 stdenv.mkDerivation rec {
   pname = "opencode";
-  version = "1.18.30";
+  version = "1.18.31";
 
   src = fetchurl {
     url = "https://github.com/anomalyco/opencode/releases/download/v${version}/opencode-linux-x64.tar.gz";
-    hash = "sha256-VQByRoWBZUlv+FuhwrZI90IejiATv0GJpoDJ/45pnRc=";
+    hash = "sha256-6TEr517YA7dBX8Kuq9ofT+k4kSo5Zzdi3Aw4wOEeveQ=";
   };
 
   dontBuild = true;
