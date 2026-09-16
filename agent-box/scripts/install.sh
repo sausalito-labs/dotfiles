@@ -171,7 +171,6 @@ $root_cfg
     wants = [ "network-online.target" ];
     wantedBy = [ "multi-user.target" ];
 
-    path = [ "/run/current-system/sw" ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
