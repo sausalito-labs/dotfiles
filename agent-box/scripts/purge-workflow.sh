@@ -4,7 +4,7 @@
 set -euo pipefail
 
 WORKFLOW_NAME="${1:-}"
-WORKFLOWS_DIR="/etc/nixos/dotfiles/agent-box/workflows"
+WORKFLOWS_DIR="/opt/agent-box/agent-box/workflows"
 WORKFLOW_DIR="$WORKFLOWS_DIR/$WORKFLOW_NAME"
 
 if [[ -z "$WORKFLOW_NAME" ]]; then

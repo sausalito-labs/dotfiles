@@ -1,36 +1,34 @@
 # Agent Box
 
-NixOS flake for an agent box with workflows.
+OpenCode + per-project workflows on plain Nix, layered over Debian/Ubuntu.
 
 ## What this is and what it isn't
 
 **This is:**
-- A NixOS flake for a remote Linux server (VPS or VM).
-- A stable base system with OpenCode, SSH, Tailscale, and a firewall.
+- A Debian/Ubuntu host with multi-user Nix and an `agent` user.
+- OpenCode (web UI on port 4096 inside the tailnet), SSH, Tailscale, ufw.
 - A set of per-project development environments called **workflows**.
-- A one-script installer for a fresh disk via `nixos-infect`.
+- A one-command installer for a fresh VPS that does **not** touch the OS.
 
 **This is not:**
+- NixOS. The operating system (sshd, root access, provisioning) is managed by
+  the provider, not by this repo.
 - A macOS, Windows, or WSL setup.
 - A desktop environment or daily driver.
-- A system where packages are installed globally by default.
 - A Docker, Kubernetes, or container platform.
-- A CI/CD runner, game engine, or game itself.
-- A project that requires pushing VPS changes to GitHub.
+- A system where packages are installed globally by default.
 
 ## How it works
 
-The agent box keeps a small, stable base system and puts all project-specific
-tooling into **workflows**.
+`scripts/install.sh` installs multi-user Nix (with Determinate Nix Installer),
+creates the `agent` user, installs Tailscale + a firewall (SSH + tailnet only),
+clones this repo to `/opt/agent-box`, and builds the agent profile
+(`opencode` + the base toolchain) via this flake. Your OS and root access stay
+exactly as the provider configured them.
 
-On a fresh Debian or Ubuntu VPS, `scripts/install.sh` uses `nixos-infect` to
-replace the OS with NixOS before applying this flake. If you already have NixOS
-installed, the installer skips that step and runs only the bootstrap.
-
-- **Base system**: OpenCode, git, gh, tmux, curl, unzip, htop, python3, openssl,
-  plus SSH, Tailscale, and firewall.
-- **Workflows**: per-project flakes under `/etc/nixos/dotfiles/agent-box/workflows/`.
-  Each workflow declares its own packages.
+`scripts/setup.sh` then collects secrets interactively (Tailscale auth key,
+OpenCode API key + web password, agent password), joins the tailnet, writes the
+OpenCode service secrets, and links `AGENTS.md` into OpenCode's system prompt.
 
 The pre-made workflows are also templates:
 
@@ -38,44 +36,62 @@ The pre-made workflows are also templates:
 - `game` — Godot 4, Python 3, unzip, curl
 - `webpage` — Node.js, pnpm
 
-### Try → pin → commit loop
+## Bootstrap a fresh VPS
 
-When you want to try a new tool:
+1. Log in as root (netcup password/key — works from any device):
+   ```bash
+   ssh root@<your-server-ip>
+   ```
+2. Run the installer:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/sausalito-labs/dotfiles/master/agent-box/scripts/install.sh | bash
+   ```
+   If you recently updated the installer, pass `-H 'Cache-Control: no-cache'`
+   to avoid fetching a stale CDN-cached copy.
+3. Run the interactive setup:
+   ```bash
+   bash /opt/agent-box/agent-box/scripts/setup.sh
+   ```
+
+That's it — no reboot, no disk wipe, no root-ssh choreography.
+
+## After setup
+
+- Log in as the agent user from the tailnet:
+  ```bash
+  ssh agent@agent-box
+  ```
+- OpenCode web UI:
+  ```bash
+  http://agent-box:4096
+  ```
+- Authenticate GitHub with the website flow:
+  ```bash
+  gh auth login
+  ```
+
+## Try → pin → commit
 
 ```bash
 enter-workflow.sh game
 nix-shell -p some-experimental-tool --run "some-experimental-tool --help"
 ```
 
-If it works, pin it permanently:
+If it works, pin it in the workflow's `flake.nix`, then:
 
 ```bash
-vim /etc/nixos/dotfiles/agent-box/workflows/game/flake.nix
 exit
 enter-workflow.sh game
 ```
 
-If it does not work, throw it away.
-
-If you were testing inside an existing workflow, the temporary package is gone
-as soon as you exit:
+Failed experiment? Throw it away:
 
 ```bash
 exit
 nix-collect-garbage -d
 ```
 
-If you created a brand-new workflow for the experiment, delete the workflow too:
-
-```bash
-exit
-purge-workflow.sh assets
-nix-collect-garbage -d
-```
-
-No leftover state in the base system.
-
-### Creating a new workflow from a template
+## Creating a new workflow from a template
 
 ```bash
 new-workflow.sh assets template
@@ -84,121 +100,29 @@ enter-workflow.sh assets
 
 This copies `workflows/template/` to `workflows/assets/`.
 
-### Cleanup
+## Cleanup
 
 - Remove a workflow: `purge-workflow.sh <name>`
 - Clean downloaded packages: `nix-collect-garbage -d`
-- Reset everything: reinstall NixOS, run the installer again.
-
-### Note on local commits
-
-The installer creates a `hardware-configuration.nix` and commits it **locally**
-so the NixOS flake can import it. Workflows created later can also be committed
-locally, but that is only for backup — `nix develop` works on uncommitted
-workflow files. You do **not** need to push anything to GitHub.
-
-## Bootstrap a fresh VPS
-
-1. SSH as root.
-2. Download and run the installer:
-   ```bash
-   curl -fsSL https://raw.githubusercontent.com/sausalito-labs/dotfiles/master/agent-box/scripts/install.sh | bash
-   ```
-   If you recently updated the installer, pass `-H 'Cache-Control: no-cache'`
-   to avoid fetching a stale CDN-cached copy.
-3. Confirm the wipe and wait for the reboot. Phase 2 starts automatically on
-   first boot via a systemd one-shot service.
-4. SSH as root again and run the interactive setup:
-   ```bash
-   /etc/nixos/dotfiles/agent-box/scripts/setup.sh
-   ```
-5. When setup finishes, root SSH is disabled. Log in as `agent`:
-   ```bash
-   ssh agent@<your-server-ip>
-   ```
-
-The installer will:
-- Install NixOS via `nixos-infect` and reboot.
-- On first boot, a systemd service clones this repo to `/etc/nixos/dotfiles`,
-  generates a hardware configuration, locks flake inputs into `flake.lock`,
-  and applies the agent box NixOS config.
-- Interactive setup then prompts for Tailscale, OpenCode, and agent password.
-- Link `agent-box/AGENTS.md` into OpenCode's system prompt.
-- Disable root SSH and rebuild.
-
-After setup, log in as `agent` and run `gh auth login` to authenticate GitHub
-via the website.
-
-## Already on NixOS?
-
-If you already have NixOS installed (e.g., in a VM, on a spare machine, or via
-Asahi Linux on a Mac), the same installer skips `nixos-infect` and just runs
-the bootstrap/setup phase:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/sausalito-labs/dotfiles/master/agent-box/scripts/install.sh | bash
-```
-
-It will generate a `hardware-configuration.nix` for that machine. If you are not
-using the VPS host, you may want to create a new host directory under
-`agent-box/hosts/` instead of reusing `hosts/agent-box/`.
-
-## Testing safely
-
-Do **not** test the full installer on hardware you care about. Good options:
-
-- A cheap cloud VPS (e.g., netcup, Hetzner, Vultr).
-- A local VM: QEMU, VirtualBox, UTM (macOS), or VMware.
-- A dry-run to inspect what the installer would do:
-  ```bash
-  curl -fsSL https://raw.githubusercontent.com/sausalito-labs/dotfiles/master/agent-box/scripts/install.sh | bash -s -- --dry-run
-  ```
+- Reset the box: reinstall Debian in the provider panel, run the installer again.
 
 ## Installer options
 
-- `--yes` or `AUTO_YES=1` — skip the confirmation prompt before `nixos-infect`.
-  ```bash
-  curl ... | bash -s -- --yes
-  # or
-  curl ... | AUTO_YES=1 bash
-  ```
-- `--dry-run` — print the plan and exit without making changes.
-  ```bash
-  curl ... | bash -s -- --dry-run
-  ```
-- `--reset` — if `/etc/nixos/dotfiles` already exists, reset it to
-  `origin/master` before bootstrapping. Useful for rerunning the installer
-  during recovery.
-  ```bash
-  curl ... | bash -s -- --reset
-  ```
-- `NIX_CHANNEL` — pin the NixOS channel used by `nixos-infect`.
-  ```bash
-  curl ... | NIX_CHANNEL=nixos-24.11 bash
-  ```
-
-## Workflows
-
-Create, enter, and remove workflows:
-
 ```bash
-new-workflow.sh my-webpage webpage
-enter-workflow.sh my-webpage
-purge-workflow.sh my-webpage
+curl ... | bash -s -- --yes         # skip the confirmation prompt
+curl ... | bash -s -- --dry-run     # print the plan, change nothing
+curl ... | bash -s -- --reset       # reset /opt/agent-box to origin/master first
+curl ... | AUTO_YES=1 bash
 ```
-
-Edit `/etc/nixos/dotfiles/agent-box/workflows/<name>/flake.nix` to add packages.
-Changes are stored under `/etc/nixos/dotfiles/agent-box/workflows/`. Commit them
-locally if you want them backed up; they do not need to be committed for
-`nix develop` to work.
 
 ## Structure
 
-- `modules/agent.nix` — vendor-agnostic NixOS module.
-- `hosts/agent-box/` — machine-specific config for the current VPS.
-- `scripts/install.sh` — one-shot installer.
-- `scripts/setup.sh` — interactive first-boot setup (called by installer).
-- `workflows/` — workflows (also serve as templates).
-- `AGENTS.md` — instructions injected into OpenCode’s system prompt.
-
-See `hosts/agent-box/README.md` for migration and adding new hosts.
+- `flake.nix` — `packages.opencode` + `packages.toolchain` (pinned nixpkgs).
+- `packages/opencode/` — OpenCode derivation (prebuilt x64 binary).
+- `services/opencode.service` — OpenCode web UI systemd unit (agent user).
+- `scripts/install.sh` — one-command Debian/Nix installer.
+- `scripts/setup.sh` — interactive first-time setup (Tailscale, OpenCode, passwords).
+- `scripts/setup-secrets.sh` — applies secrets (Tailscale up, OpenCode auth).
+- `scripts/{new,enter,purge}-workflow.sh` — workflow helpers.
+- `workflows/` — per-project flakes (also serve as templates).
+- `AGENTS.md` — instructions injected into OpenCode's system prompt.

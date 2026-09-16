@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time bootstrap script for secrets and auth on the NixOS agent box.
+# One-time bootstrap script for secrets and auth on the agent box.
 #
 # Create /var/lib/agent-setup/secrets.env with:
 #

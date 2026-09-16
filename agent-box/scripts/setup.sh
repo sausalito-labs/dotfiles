@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Interactive one-time setup for the NixOS agent box.
-# Run this as root after the first NixOS boot.
+# Interactive one-time setup for the agent box (Debian + Nix).
+# Run this as root after scripts/install.sh.
 
 set -euo pipefail
 
@@ -10,7 +10,7 @@ SECRETS_DIR="/var/lib/agent-setup"
 SECRETS_FILE="$SECRETS_DIR/secrets.env"
 
 if [[ "$EUID" -ne 0 ]]; then
-    echo "ERROR: Run this script as root (e.g., sudo /etc/nixos/dotfiles/agent-box/scripts/setup.sh)" >&2
+    echo "ERROR: Run this script as root (e.g., sudo /opt/agent-box/agent-box/scripts/setup.sh)" >&2
     exit 1
 fi
 
@@ -58,7 +58,7 @@ chmod 600 /var/lib/opencode/opencode.env
 # -----------------------------------------------------------------------------
 # Run the automated auth setup
 # -----------------------------------------------------------------------------
-/etc/nixos/dotfiles/agent-box/scripts/setup-secrets.sh
+/opt/agent-box/agent-box/scripts/setup-secrets.sh
 
 # Make sure the OpenCode service sees the new secrets.
 systemctl restart opencode
@@ -67,10 +67,10 @@ systemctl restart opencode
 # Inject agent instructions into OpenCode
 # -----------------------------------------------------------------------------
 mkdir -p /home/agent/.config/opencode
-if [[ -f /etc/nixos/dotfiles/agent-box/AGENTS.md ]]; then
+if [[ -f /opt/agent-box/agent-box/AGENTS.md ]]; then
     # AGENT_BOX contains the agent-box specific rules. It is loaded via
     # opencode.json so the clean AGENTS.md stays free for custom prompts.
-    ln -sf /etc/nixos/dotfiles/agent-box/AGENTS.md /home/agent/.config/opencode/AGENT_BOX
+    ln -sf /opt/agent-box/agent-box/AGENTS.md /home/agent/.config/opencode/AGENT_BOX
     chown -R agent:agent /home/agent/.config/opencode
     echo "==> Linked agent-box instructions to ~/.config/opencode/AGENT_BOX"
 fi
@@ -100,7 +100,7 @@ echo "==> Wrote ~/.config/opencode/opencode.json"
 # Optional: Godot export templates
 # -----------------------------------------------------------------------------
 echo
-echo "The game workflow is available at /etc/nixos/dotfiles/agent-box/workflows/game"
+echo "The game workflow is available at /opt/agent-box/agent-box/workflows/game"
 echo "Enter it with: enter-workflow.sh game"
 echo
 

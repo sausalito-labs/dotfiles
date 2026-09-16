@@ -1,15 +1,13 @@
 # Agent Box Instructions
 
-You are running on the **agent box**, a NixOS system designed for experimenting
-with tools and workflows without polluting the base system.
-
-This is a NixOS server configuration. It is not a desktop environment, not
-macOS/Windows/WSL, and not a Docker or container host. Do not install tools
-globally by default; use workflows instead.
+You are running on the **agent box**, a Debian host with multi-user Nix layered
+on top. The operating system (sshd, root access, host provisioning) is managed
+by the provider (netcup); this repo manages only the per-user Nix environment,
+the OpenCode web service, and per-project workflows.
 
 ## Base system tools
 
-The following are always available without entering a workflow:
+Installed into the `agent` user's Nix profile, so they are always on PATH:
 
 - `git`, `gh` — version control and GitHub CLI
 - `tmux` — persistent terminal sessions
@@ -18,17 +16,20 @@ The following are always available without entering a workflow:
 - `python3`, `openssl` — scripting and crypto utilities
 - `opencode` — this agent
 
+Add more with `nix profile install nixpkgs#<pkg>`, or by adding them to the
+`toolchain` package in `./flake.nix` and reinstalling the profile.
+
 ## When asked to install a tool
 
 1. If a relevant workflow already exists, edit that workflow's `flake.nix`.
 2. Otherwise, create a new workflow with `new-workflow.sh <name> [template]`.
-3. Never install a tool globally with `nix-env` or edit the base NixOS config
-   unless the user explicitly asks.
+3. Never install a tool globally with `nix-env` or edit system files unless the
+   user explicitly asks.
 
 ## Workflows
 
 A **workflow** is a per-project Nix flake that lives under
-`/etc/nixos/dotfiles/agent-box/workflows/<name>/`. Workflows declare their own
+`/opt/agent-box/agent-box/workflows/<name>/`. Workflows declare their own
 packages so you can install arbitrary tools without touching the base system.
 
 ### Pre-made workflows
@@ -45,13 +46,6 @@ These also serve as templates:
 new-workflow.sh <name> [template]   # create a workflow from a template
 enter-workflow.sh <name>            # enter a workflow's nix develop shell
 purge-workflow.sh <name>            # delete a workflow
-```
-
-You can also create a workflow manually by copying a template:
-
-```bash
-cp -r /etc/nixos/dotfiles/agent-box/workflows/template \
-      /etc/nixos/dotfiles/agent-box/workflows/my-workflow
 ```
 
 ### Try → pin → commit
@@ -79,23 +73,12 @@ When you need a new tool:
 
 5. Commit the workflow locally if you want it backed up:
    ```bash
-   git -C /etc/nixos/dotfiles add agent-box/workflows/<name>
-   git -C /etc/nixos/dotfiles commit -m "add <tool> to <name> workflow"
+   git -C /opt/agent-box add agent-box/workflows/<name>
+   git -C /opt/agent-box commit -m "add <tool> to <name> workflow"
    ```
 
    Nix does not require this commit for `nix develop` to work. You do not need
    to push it to GitHub.
-
-### Updating a template
-
-If you find a workflow setup that should become the default for future projects,
-edit the corresponding template directly:
-
-```bash
-vim /etc/nixos/dotfiles/agent-box/workflows/game/flake.nix
-```
-
-Then commit locally.
 
 ### Cleanup
 
@@ -111,27 +94,37 @@ nix-collect-garbage -d
 
 When you make changes to workflows or other files, only commit files you
 actually edited. Do **not** commit machine-generated files such as
-`hardware-configuration.nix` or `flake.lock`.
+`flake.lock`.
 
-If you accidentally stage them, unstage with:
+## Updating the agent environment
 
-```bash
-git -C /etc/nixos/dotfiles reset HEAD agent-box/hosts/agent-box/hardware-configuration.nix agent-box/flake.lock
-```
+Tool upgrades come from the pinned `nixpkgs` input in `./flake.nix`:
+- Change `flake.nix` (or bump the nixpkgs input), then:
+  ```bash
+  sudo -u agent nix profile upgrade opencode toolchain
+  systemctl restart opencode
+  ```
 
 ## Important paths
 
-- `/etc/nixos/dotfiles/` — this repo (system config + workflows)
-- `/etc/nixos/dotfiles/agent-box/workflows/` — workflows and templates
+- `/opt/agent-box/` — this repo (clone of the dotfiles repo)
+- `/opt/agent-box/agent-box/` — the agent box config, packages, scripts
+- `/opt/agent-box/agent-box/workflows/` — workflows and templates
 - `/home/agent/.config/opencode/AGENTS.md` — this file
+- `/var/lib/opencode/opencode.env` — OpenCode web UI secrets
+- `/var/lib/agent-setup/secrets.env` — Tailscale/OpenCode API secrets
+
+## Services
+
+- `opencode.service` — OpenCode web UI on port 4096 (tailnet only).
+  Restart with: `systemctl restart opencode`
+- `tailscaled.service` — tailnet mesh.
 
 ## Rules
 
-- Do **not** install global packages with `nix-env` or edit the base NixOS config
-  unless the user explicitly asks. Prefer creating or editing a workflow.
-- Rebuild the system only when asked:
-  ```bash
-  sudo nixos-rebuild switch --flake /etc/nixos/dotfiles/agent-box#agent-box
-  ```
-- Tailscale is running; SSH (port 22) is the only public port.
+- Do **not** install global packages with `nix-env` or edit system files unless
+  the user explicitly asks. Prefer creating or editing a workflow.
+- Root SSH and OS access are managed by netcup; do not reconfigure sshd or root
+  access unless asked.
+- SSH (port 22) is the only public port; everything else is firewalled.
 - OpenCode web UI runs on port 4096 inside the tailnet.

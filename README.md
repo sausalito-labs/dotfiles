@@ -1,15 +1,14 @@
 # dotfiles
 
-Declarative system configuration. Currently contains the NixOS flake for
-`agent-box`, a remote Linux server (VPS/VM) that runs OpenCode and Tailscale.
+Declarative tooling layered over plain Nix. Currently contains `agent-box`, a
+remote Linux server (VPS/VM) that runs OpenCode and Tailscale over Debian/Nix.
 
-- `agent-box/` — NixOS config for an agent box (OpenCode, Tailscale/Headscale,
-  SSH, agent workflows).
-  - `modules/agent.nix` — reusable, vendor-agnostic NixOS module.
-  - `hosts/agent-box/` — machine-specific config for the current VPS.
-  - `scripts/install.sh` — one-shot installer for a fresh VPS.
-  - `scripts/setup.sh` — interactive first-boot setup.
-  - `workflows/` — workflows (also serve as templates).
+- `agent-box/` — agent box configuration (OpenCode, Tailscale, SSH, workflows).
+  - `flake.nix` — `opencode` derivation + agent toolchain, pinned nixpkgs.
+  - `packages/opencode/` — OpenCode package (prebuilt x64 binary).
+  - `services/opencode.service` — OpenCode web UI systemd unit (agent user).
+  - `scripts/install.sh` — one-command installer for a fresh Debian/Ubuntu VPS.
+  - `scripts/setup.sh` — interactive first-time setup.
+  - `workflows/` — per-project Nix dev shells (also serve as templates).
 
-See `agent-box/README.md` for bootstrap and `agent-box/hosts/agent-box/README.md`
-for migration and daily-use details.
+See `agent-box/README.md` for bootstrap and daily-use details.

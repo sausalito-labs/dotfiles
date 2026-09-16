@@ -1,14 +1,10 @@
 #!/usr/bin/env bash
-# One-script installer for the agent box.
+# One-command installer for the agent box on Debian/Ubuntu with plain Nix.
 #
-# This installer will:
-#   - If not on NixOS: wipe the disk, install NixOS via nixos-infect, reboot,
-#     then continue automatically.
-#   - If already on NixOS: clone this repo, build the agent box config, run
-#     interactive setup, and disable root SSH.
-#
-# WARNING: The nixos-infect phase wipes the entire disk. Only run this on a
-# machine you are willing to erase (e.g., a fresh VPS or a throwaway VM).
+# Unlike the old nixos-infect flow, this does not replace the operating system.
+# It installs multi-user Nix on the distro the provider already gives you and
+# layers the agent box on top, so root access stays under the provider's control
+# and works from any device.
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/sausalito-labs/dotfiles/master/agent-box/scripts/install.sh | bash
@@ -16,20 +12,16 @@
 # Options:
 #   --yes        Skip the confirmation prompt.
 #   --dry-run    Print what would happen and exit without changing anything.
-#
-# Environment variables:
-#   NIX_CHANNEL  e.g. nixos-24.11 (defaults to latest stable from channels.nixos.org)
-#   AUTO_YES=1   Same as --yes
+#   --reset      If the repo already exists, reset it to origin/master.
 
 set -euo pipefail
 
 REPO_URL="https://github.com/sausalito-labs/dotfiles.git"
-INSTALL_URL="https://raw.githubusercontent.com/sausalito-labs/dotfiles/master/agent-box/scripts/install.sh"
-REPO_DIR="/etc/nixos/dotfiles"
-FLAKE_DIR="/etc/nixos/dotfiles/agent-box"
-HOST_DIR="/etc/nixos/dotfiles/agent-box/hosts/agent-box"
-PHASE2_NIX="/etc/nixos/agent-box-phase2.nix"
-BOOTSTRAP_DONE="/etc/agent-box-bootstrap-done"
+REPO_DIR="/opt/agent-box"
+AGENT_DIR="/opt/agent-box/agent-box"
+NIX_BIN="/nix/var/nix/profiles/default/bin/nix"
+AGENT_USER="agent"
+AGENT_HOME="/home/agent"
 
 DRY_RUN=0
 AUTO_YES="${AUTO_YES:-0}"
@@ -37,18 +29,13 @@ RESET_REPO=0
 
 usage() {
     cat <<EOF
-Usage: $0 [OPTIONS] [phase2]
+Usage: $0 [OPTIONS]
 
 Options:
   --dry-run    Print the plan and exit without making changes.
-  --yes        Skip the confirmation prompt before nixos-infect.
-  --reset      If the repo already exists, reset it to origin/master before
-               bootstrapping. Useful for rerunning the installer.
+  --yes        Skip the confirmation prompt.
+  --reset      If the repo already exists, reset it to origin/master.
   -h, --help   Show this help message.
-
-Environment:
-  NIX_CHANNEL  NixOS channel for nixos-infect (default: latest stable).
-  AUTO_YES=1   Same as --yes.
 EOF
 }
 
@@ -69,17 +56,13 @@ while [[ $# -gt 0 ]]; do
             RESET_REPO=1
             shift
             ;;
-        phase2)
-            phase2
-            exit 0
-            ;;
         -h|--help)
             usage
             exit 0
             ;;
         *)
             echo "Unknown option: $1" >&2
-            echo "Usage: $0 [--dry-run] [--yes] [phase2]" >&2
+            echo "Usage: $0 [--dry-run] [--yes] [--reset]" >&2
             exit 1
             ;;
     esac
@@ -92,429 +75,250 @@ is_nixos() {
     [[ -f /etc/NIXOS ]]
 }
 
-get_ip() {
-    hostname -I 2>/dev/null | awk '{print $1}' || echo "<your-server-ip>"
-}
-
 get_os_id() {
     if [[ -f /etc/os-release ]]; then
         grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"'
     fi
 }
 
-get_latest_stable_channel() {
-    # Try to detect the latest stable NixOS channel from the public S3 bucket.
-    # If this fails or returns nothing, leave NIX_CHANNEL blank so nixos-infect
-    # uses its own default.
-    curl -fsSL "https://nix-channels.s3.amazonaws.com/" 2>/dev/null \
-        | grep -oE 'nixos-[0-9]+\.[0-9]+' \
-        | sort -V -u \
-        | tail -1 || true
+get_ip() {
+    hostname -I 2>/dev/null | awk '{print $1}' || echo "<your-server-ip>"
 }
 
-write_phase2_service() {
-    mkdir -p /etc/nixos
+step() {
+    echo
+    echo "==> $*"
+}
 
-    # Preserve root access across the disk wipe: bake the current root
-    # password hash and SSH keys into the first NixOS system. nixos-infect
-    # does not carry /etc/shadow, so without this root would have no password.
-    local root_hash="" root_cfg="" root_keys=()
-    if [[ -r /etc/shadow ]]; then
-        root_hash="$(awk -F: '/^root:/{print $2}' /etc/shadow 2>/dev/null || true)"
-        case "$root_hash" in
-            ""|"!"|"*"|"!*")
-                root_hash=""
-                ;;
-        esac
-    fi
-    if [[ -r /root/.ssh/authorized_keys ]]; then
-        while IFS= read -r key; do
-            [[ -n "$key" ]] || continue
-            root_keys+=("$key")
-        done < <(grep -v '^#' /root/.ssh/authorized_keys 2>/dev/null || true)
-    fi
-
-    # Never proceed into a box that will have no way in: if there is neither a
-    # usable password hash nor any authorized key, ask the operator to set a
-    # new root password right now (works from any device, no keys stored).
-    if [[ -z "$root_hash" && ${#root_keys[@]} -eq 0 ]]; then
-        if [[ -r /dev/tty ]]; then
-            local new_root=""
-            if ! read -rsp "No usable root password/keys found. Set one for your NixOS root: " new_root < /dev/tty; then
-                echo
-                echo "ERROR: no terminal available to set a root password." >&2
-                exit 1
-            fi
-            echo
-            if [[ -n "$new_root" ]]; then
-                root_hash="$(printf '%s' "$new_root" | openssl passwd -6 -stdin 2>/dev/null || true)"
-            fi
-            if [[ -z "$root_hash" ]]; then
-                echo "ERROR: could not generate a password hash (is openssl installed?)." >&2
-                echo "Set a root password with 'passwd root' and rerun the installer." >&2
-                exit 1
-            fi
-            echo "==> Will set a new root password on the NixOS box; log in with it after reboot."
-        else
-            echo "ERROR: No usable root password or SSH keys to preserve, and no terminal to ask for one." >&2
-            echo "Log into the box, run 'passwd root', then rerun the installer." >&2
-            exit 1
-        fi
-    fi
-
-    if [[ -n "$root_hash" || ${#root_keys[@]} -gt 0 ]]; then
-        root_cfg="  users.users.root = {"
-        if [[ -n "$root_hash" ]]; then
-            root_cfg+=$'\n    hashedPassword = "'"$root_hash"$'";'
-        fi
-        if [[ ${#root_keys[@]} -gt 0 ]]; then
-            root_cfg+=$'\n    openssh.authorizedKeys.keys = ['
-            for key in "${root_keys[@]}"; do
-                [[ -n "$key" ]] || continue
-                # Indented strings (''...'') let keys contain quotes/backslashes
-                # literally, same as nixos-infect uses. Only '' needs escaping.
-                key_esc=$(printf '%s' "$key" | tr -d '\r' | sed "s/''/'''/g")
-                root_cfg+=$'\n      '"''${key_esc}''"
-            done
-            root_cfg+=$'\n    ];'
-        fi
-        root_cfg+=$'\n  };'
-        echo "==> Preserving root password and SSH keys in phase 2 config"
+run() {
+    if [[ "$DRY_RUN" == "1" ]]; then
+        echo "    [dry-run] $*"
     else
-        echo "WARNING: No usable root password or SSH keys found; root may be inaccessible after the switch." >&2
-    fi
-
-    cat > "$PHASE2_NIX" <<EOF
-{ pkgs, ... }:
-
-{
-  # The first-built NixOS system needs these for the phase 2 bootstrap:
-  # curl fetches this installer at first boot, git clones the repo.
-  environment.systemPackages = [ pkgs.curl pkgs.git ];
-
-  # NixOS defaults to "prohibit-password" for root, which would ignore the
-  # preserved password below and brick access on key-less boxes. Allow the
-  # baked password for login until phase 2 switches to the flake config.
-  services.openssh.settings.PermitRootLogin = "yes";
-
-$root_cfg
-  systemd.services.agent-box-phase2 = {
-    description = "Agent Box phase 2 bootstrap";
-    after = [ "network-online.target" ];
-    wants = [ "network-online.target" ];
-    wantedBy = [ "multi-user.target" ];
-
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      # Self-healing trigger: re-fetch this installer at first boot instead of
-      # relying on a copy surviving the reboot. Cache-Control busts stale CDN
-      # copies. Runs once via /etc/agent-box-bootstrap-done.
-      # Systemd services do not get /run/current-system/sw/bin on PATH, so use
-      # absolute store paths for the fetch and export PATH for the script run.
-      ExecStart = ''\${pkgs.bash}/bin/bash -c 'export PATH="/run/current-system/sw/bin:/run/current-system/sw/sbin:/usr/bin:/bin:/usr/sbin:/sbin"; if [ ! -e "$BOOTSTRAP_DONE" ]; then \${pkgs.curl}/bin/curl -fsSL -H "Cache-Control: no-cache" "$INSTALL_URL" -o /root/agent-box-install.sh && \${pkgs.bash}/bin/bash /root/agent-box-install.sh phase2; fi' '';
-      Restart = "on-failure";
-      RestartSec = "10s";
-      StandardOutput = "journal";
-      StandardError = "journal";
-    };
-  };
-}
-EOF
-    echo "==> Wrote phase 2 systemd trigger to $PHASE2_NIX"
-
-    # Validate the generated module parses as Nix before nixos-infect wipes the
-    # disk. This catches quoting bugs in preserved keys/passwords early.
-    local nix_parse=""
-    if command -v nix-instantiate >/dev/null 2>&1; then
-        nix_parse="$(command -v nix-instantiate)"
-    elif [[ -x /nix/var/nix/profiles/default/bin/nix-instantiate ]]; then
-        nix_parse="/nix/var/nix/profiles/default/bin/nix-instantiate"
-    fi
-
-    if [[ -n "$nix_parse" ]]; then
-        if ! "$nix_parse" --parse "$PHASE2_NIX" >/dev/null 2>&1; then
-            echo "ERROR: generated phase 2 module failed Nix syntax check:" >&2
-            "$nix_parse" --parse "$PHASE2_NIX" >&2 || true
-            exit 1
-        fi
-        echo "==> Phase 2 module passes Nix syntax check"
-    fi
-}
-
-disable_root_ssh() {
-    local config="$HOST_DIR/configuration.nix"
-    if grep -q 'services.openssh.settings.PermitRootLogin = "yes";' "$config"; then
-        sed -i 's/services.openssh.settings.PermitRootLogin = "yes";/services.openssh.settings.PermitRootLogin = "no";/' "$config"
-        echo "==> Disabled root SSH in $config"
-    else
-        echo "WARNING: Could not find root SSH override to disable." >&2
+        "$@"
     fi
 }
 
 # ---------------------------------------------------------------------------
 # OS / safety checks
 # ---------------------------------------------------------------------------
-check_can_infect() {
-    local os_kernel
-    os_kernel="$(uname -s)"
+check_prereqs() {
+    if [[ "$(uname -s)" != "Linux" ]]; then
+        echo "ERROR: The agent box installer requires Linux (Debian/Ubuntu)." >&2
+        echo "Detected: $(uname -s)" >&2
+        exit 1
+    fi
 
-    if [[ "$os_kernel" != "Linux" ]]; then
-        echo "ERROR: nixos-infect requires Linux. Detected: $os_kernel" >&2
-        echo "If you already have NixOS installed, run this script there and it will skip nixos-infect." >&2
-        echo "Otherwise, run this on a fresh Debian/Ubuntu VPS or inside a Linux VM." >&2
-        return 1
+    if [[ "$(uname -m)" != "x86_64" ]]; then
+        echo "ERROR: x86_64-linux is required (opencode ships a linux-x64 binary)." >&2
+        echo "Detected: $(uname -m)" >&2
+        exit 1
+    fi
+
+    if [[ "$EUID" -ne 0 ]]; then
+        echo "ERROR: Run this as root." >&2
+        exit 1
     fi
 
     local os_id
     os_id="$(get_os_id)"
     case "$os_id" in
         debian|ubuntu)
-            return 0
             ;;
         *)
-            echo "ERROR: This installer uses nixos-infect, which only supports Debian/Ubuntu for unattended installs." >&2
-            echo "Detected OS: ${os_id:-unknown}" >&2
-            echo "If you already have NixOS installed, run this script there and it will skip nixos-infect." >&2
-            return 1
+            echo "ERROR: This installer targets Debian/Ubuntu. Detected: ${os_id:-unknown}" >&2
+            exit 1
             ;;
     esac
+
+    if is_nixos; then
+        echo "ERROR: This box is running NixOS, which is no longer used." >&2
+        echo "Reimage it to Debian/Ubuntu (netcup panel), then rerun this installer." >&2
+        exit 1
+    fi
 }
 
-confirm_infect() {
+confirm_install() {
     if [[ "$AUTO_YES" == "1" ]]; then
         return 0
     fi
 
     cat <<EOF
 
-WARNING: This will wipe the entire disk on $(hostname) and install NixOS.
-This is intended for a fresh VPS or throwaway VM, NOT your laptop or main machine.
+This installs Nix and the agent box on $(hostname) ($(get_ip)).
+It will add the '$AGENT_USER' user, install Nix, Tailscale, a firewall,
+and run the OpenCode web service. Your OS and root access are untouched.
+
+Continue? [y/N]
 EOF
     local answer=""
     read -rp "Continue? [y/N] " answer </dev/tty || true
     [[ "$answer" =~ ^[Yy]$ ]]
 }
 
-print_plan() {
-    echo "Detected kernel: $(uname -s)"
-    echo "NixOS: $(is_nixos && echo yes || echo no)"
-    echo
+# ---------------------------------------------------------------------------
+# Install steps
+# ---------------------------------------------------------------------------
+ensure_base_pkgs() {
+    step "Installing base packages (git, curl, ufw)..."
+    run apt-get update -y
+    run apt-get install -y git curl ca-certificates ufw
 
-    if is_nixos; then
-        echo "Plan:"
-        echo "  - skip nixos-infect (already on NixOS)"
-        echo "  - clone $REPO_URL to $REPO_DIR"
-        echo "  - generate $HOST_DIR/hardware-configuration.nix"
-        echo "  - lock flake inputs into $FLAKE_DIR/flake.lock"
-        echo "  - run nixos-rebuild switch --flake $FLAKE_DIR#agent-box"
-        echo "  - run interactive setup (Tailscale, OpenCode, password)"
-        echo "  - disable root SSH and rebuild"
-        echo "  - print: ssh agent@$(get_ip)"
-        return
+    if [[ "$(hostname)" != "agent-box" ]]; then
+        step "Setting hostname to agent-box..."
+        run hostnamectl set-hostname agent-box
+        if ! grep -q 'agent-box' /etc/hosts; then
+            echo "127.0.0.1 agent-box" >> /etc/hosts
+        fi
     fi
-
-    if [[ "$(uname -s)" != "Linux" ]]; then
-        echo "Plan:"
-        echo "  - exit: nixos-infect requires Linux"
-        echo "  - if you install NixOS first, re-run this script to bootstrap the agent box"
-        return
-    fi
-
-    local os_id
-    os_id="$(get_os_id)"
-    if [[ "$os_id" != "debian" && "$os_id" != "ubuntu" ]]; then
-        echo "Plan:"
-        echo "  - exit: nixos-infect only supports Debian/Ubuntu (detected: ${os_id:-unknown})"
-        echo "  - if you install NixOS first, re-run this script to bootstrap the agent box"
-        return
-    fi
-
-    local detected_channel
-    detected_channel="$(get_latest_stable_channel)"
-
-    echo "Plan:"
-    echo "  - run nixos-infect with NIX_CHANNEL=${detected_channel:-<nixos-infect default>}"
-    if [[ "$RESET_REPO" == "1" ]]; then
-        echo "  - reset $REPO_DIR to origin/master"
-    fi
-    echo "  - reboot"
-    echo "  - on first boot, a systemd one-shot service will automatically:"
-    echo "      - clone $REPO_URL to $REPO_DIR"
-    echo "      - generate hardware configuration"
-    echo "      - lock flake inputs into $FLAKE_DIR/flake.lock"
-    echo "      - run nixos-rebuild switch --flake $FLAKE_DIR#agent-box"
-    echo "      - run interactive setup (Tailscale, OpenCode, password)"
-    echo "      - disable root SSH and rebuild"
-    echo "      - print: ssh agent@$(get_ip)"
 }
 
-# ---------------------------------------------------------------------------
-# Phases
-# ---------------------------------------------------------------------------
-phase1() {
-    echo "============================================================"
-    echo " Agent Box Installer - Phase 1: Install NixOS"
-    echo "============================================================"
-    echo
-
-    if is_nixos; then
-        echo "Already on NixOS. Skipping phase 1."
-        phase2
+ensure_nix() {
+    if [[ -x "$NIX_BIN" ]]; then
+        step "Nix already installed ($NIX_BIN)"
         return
     fi
 
+    step "Installing multi-user Nix (Determinate Nix Installer)..."
     if [[ "$DRY_RUN" == "1" ]]; then
-        echo "==> Dry run mode. Nothing will be changed."
-        print_plan
-        exit 0
+        echo "    [dry-run] curl -fsSL https://install.determinate.systems/nix | sh -s -- install --no-confirm"
+        return
     fi
-
-    if ! check_can_infect; then
-        exit 1
-    fi
-
-    if ! confirm_infect; then
-        echo "Aborted."
-        exit 0
-    fi
-
-    NIX_CHANNEL="${NIX_CHANNEL:-$(get_latest_stable_channel)}"
-    echo "==> Using NixOS channel: ${NIX_CHANNEL:-<nixos-infect default>}"
-
-    if mount | grep -q "on /tmp type tmpfs"; then
-        echo "==> /tmp is tmpfs; telling nixos-infect to skip its swap step"
-        export NO_SWAP=1
-    fi
-
-    echo "==> Writing phase 2 systemd trigger..."
-    write_phase2_service
-
-    echo "==> Running nixos-infect..."
-    curl https://raw.githubusercontent.com/elitak/nixos-infect/master/nixos-infect \
-        | NIX_CHANNEL="$NIX_CHANNEL" NIXOS_IMPORT="$PHASE2_NIX" bash -x 2>&1 | tee /tmp/nixos-infect.log
-
-    echo
-    echo "============================================================"
-    echo " Phase 1 complete. Rebooting into NixOS."
-    echo " Phase 2 will run automatically on first boot via systemd."
-    echo "============================================================"
-    reboot
+    curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix \
+        | sh -s -- install --no-confirm --extra-conf "experimental-features = nix-command flakes"
 }
 
-phase2() {
-    echo "============================================================"
-    echo " Agent Box Installer - Phase 2: Bootstrap"
-    echo "============================================================"
-    echo
-
-    # Systemd services do not inherit the NixOS login PATH or NIX_PATH. Make
-    # sure git/nix/nixos-rebuild/nixos-generate-config resolve regardless of
-    # how phase 2 is invoked.
-    export PATH="/run/current-system/sw/bin:/run/current-system/sw/sbin:$PATH"
-    if [[ -d /nix/var/nix/profiles/per-user/root/channels/nixos ]]; then
-        export NIX_PATH="nixpkgs=/nix/var/nix/profiles/per-user/root/channels/nixos${NIX_PATH:+:$NIX_PATH}"
+ensure_agent_user() {
+    step "Creating '$AGENT_USER' user..."
+    if ! id "$AGENT_USER" &>/dev/null; then
+        run useradd -m -s /bin/bash -U "$AGENT_USER"
     fi
 
-    if [[ -d "$REPO_DIR" ]]; then
+    run usermod -aG sudo "$AGENT_USER"
+    if getent group nix-users >/dev/null 2>&1; then
+        run usermod -aG nix-users "$AGENT_USER"
+    fi
+
+    echo "$AGENT_USER ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/agent-box
+    chmod 440 /etc/sudoers.d/agent-box
+
+    cat > /etc/profile.d/agent-box.sh <<'EOF'
+export PATH="$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"
+EOF
+
+    step "Creating state directories..."
+    run mkdir -p "$AGENT_HOME/.config/opencode" \
+        "$AGENT_HOME/.local/share/opencode" \
+        "$AGENT_HOME/.local/share/godot/export_templates" \
+        /var/lib/opencode
+    run chown -R "$AGENT_USER:$AGENT_USER" "$AGENT_HOME/.config" "$AGENT_HOME/.local"
+    run chown "$AGENT_USER:$AGENT_USER" /var/lib/opencode
+}
+
+ensure_repo() {
+    if [[ -d "$AGENT_DIR/.git" ]]; then
         if [[ "$RESET_REPO" == "1" ]]; then
-            echo "==> Resetting $REPO_DIR to origin/master..."
-            git -C "$REPO_DIR" fetch origin
-            git -C "$REPO_DIR" reset --hard origin/master
+            step "Resetting repo to origin/master..."
+            run git -C "$AGENT_DIR" fetch origin
+            run git -C "$AGENT_DIR" reset --hard origin/master
         else
-            echo "==> $REPO_DIR already exists. Skipping clone."
+            step "Repo already present at $AGENT_DIR"
         fi
     else
-        echo "==> Backing up default /etc/nixos and cloning repo..."
-        mv /etc/nixos /etc/nixos.bak
-        git clone "$REPO_URL" "$REPO_DIR"
+        step "Cloning repo to $REPO_DIR..."
+        run git clone "$REPO_URL" "$REPO_DIR"
     fi
+}
 
-    echo "==> Regenerating hardware configuration..."
-    nixos-generate-config --show-hardware-config > "$HOST_DIR/hardware-configuration.nix"
-
-    echo "==> Detecting boot disk..."
-    root_part="$(findmnt -n -o SOURCE / 2>/dev/null || true)"
-    if [[ -n "$root_part" ]]; then
-        root_disk="$(lsblk -no pkname "$root_part" 2>/dev/null || true)"
-        if [[ -n "$root_disk" && "/dev/$root_disk" != "$root_part" ]]; then
-            if ! grep -q 'boot.loader.grub.device' "$HOST_DIR/configuration.nix"; then
-                echo "==> Boot disk detected as /dev/$root_disk; adding to configuration.nix"
-                sed -i '/enable = true;/a\    device = lib.mkDefault "/dev/'"$root_disk"'";' "$HOST_DIR/configuration.nix"
-            fi
-        else
-            echo "==> Could not detect boot disk. Verify boot.loader.grub.device in $HOST_DIR/configuration.nix"
-        fi
-    else
-        echo "==> Could not detect root mount. Verify boot.loader.grub.device in $HOST_DIR/configuration.nix"
+ensure_tailscale() {
+    if command -v tailscale >/dev/null 2>&1; then
+        step "Tailscale already installed"
+        return
     fi
-
-    if [[ ! -f "$FLAKE_DIR/flake.lock" ]]; then
-        echo "==> Locking flake inputs..."
-        nix --extra-experimental-features "nix-command flakes" flake lock "$FLAKE_DIR"
-    else
-        echo "==> flake.lock already exists."
+    step "Installing Tailscale..."
+    if [[ "$DRY_RUN" == "1" ]]; then
+        echo "    [dry-run] curl -fsSL https://tailscale.com/install.sh | sh"
+        return
     fi
+    curl -fsSL https://tailscale.com/install.sh | sh
+}
 
-    echo "==> Committing bootstrap changes..."
-    git -C "$REPO_DIR" config user.email >/dev/null 2>&1 || git -C "$REPO_DIR" config user.email "agent-box@localhost"
-    git -C "$REPO_DIR" config user.name >/dev/null 2>&1 || git -C "$REPO_DIR" config user.name "Agent Box"
-    if git -C "$REPO_DIR" status --short | grep -q .; then
-        git -C "$REPO_DIR" add -A
-        git -C "$REPO_DIR" commit -m "agent-box: bootstrap"
+ensure_firewall() {
+    step "Configuring firewall (ufw: allow SSH + tailnet)..."
+    run ufw allow 22/tcp
+    run ufw allow in on tailscale0
+    run ufw --force enable
+}
+
+install_profile() {
+    step "Building and installing OpenCode + toolchain into '$AGENT_USER' Nix profile..."
+    if [[ "$DRY_RUN" == "1" ]]; then
+        echo "    [dry-run] sudo -u agent nix profile install $AGENT_DIR#opencode $AGENT_DIR#toolchain"
+        return
     fi
+    sudo -u "$AGENT_USER" env \
+        NIX_CONFIG="experimental-features = nix-command flakes" \
+        "$NIX_BIN" profile install \
+        "$AGENT_DIR#opencode" \
+        "$AGENT_DIR#toolchain"
+}
 
-    echo "==> Applying initial NixOS configuration..."
-    nixos-rebuild switch --flake "$FLAKE_DIR#agent-box"
-
-    if [[ -z "${INVOCATION_ID:-}" ]]; then
-        echo "==> Running interactive setup..."
-        "$FLAKE_DIR/scripts/setup.sh"
-
-        echo "==> Disabling root SSH..."
-        disable_root_ssh
-        git -C "$REPO_DIR" add -A
-        git -C "$REPO_DIR" commit -m "agent-box: disable root SSH after setup"
-
-        echo "==> Rebuilding with root SSH disabled..."
-        nixos-rebuild switch --flake "$FLAKE_DIR#agent-box"
-
-        echo
-        echo "============================================================"
-        echo " Setup complete."
-        echo "============================================================"
-        echo "Root SSH is now disabled. Log in as agent:"
-        echo "  ssh agent@$(get_ip)"
-        echo
-    else
-        echo "==> Running under systemd without a TTY; skipping interactive setup."
-        echo "    Root SSH remains enabled. After this bootstrap finishes, log in as root and run:"
-        echo "      $FLAKE_DIR/scripts/setup.sh"
-
-        echo
-        echo "============================================================"
-        echo " Bootstrap complete."
-        echo "============================================================"
-        echo "Root SSH is still enabled. Log in as root and run setup:"
-        echo "  $FLAKE_DIR/scripts/setup.sh"
-        echo
+install_service() {
+    step "Installing OpenCode systemd service..."
+    if [[ "$DRY_RUN" != "1" ]]; then
+        install -m 644 "$AGENT_DIR/services/opencode.service" /etc/systemd/system/opencode.service
+        systemctl daemon-reload
+        systemctl enable opencode
     fi
+}
 
-    echo "==> Cleaning up bootstrap trigger..."
-    rm -f "$PHASE2_NIX"
-    touch "$BOOTSTRAP_DONE"
+print_next_steps() {
+    cat <<EOF
+
+============================================================
+ Agent box install complete.
+============================================================
+
+Root SSH and the OS are untouched. Next:
+
+  1. Run interactive setup (Tailscale, OpenCode, passwords):
+       bash $AGENT_DIR/scripts/setup.sh
+
+  2. Reconnect once setup restarts services:
+       ssh agent@$(get_ip)
+
+  OpenCode web UI (created by setup):
+       http://agent-box:4096   (inside the tailnet)
+EOF
 }
 
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 if [[ "$DRY_RUN" == "1" ]]; then
-    print_plan
+    echo "Plan: install multi-user Nix + agent box on this Debian/Ubuntu host."
+    echo "  - base packages: git, curl, ufw"
+    echo "  - Determinate Nix (multi-user, flakes enabled)"
+    echo "  - user '$AGENT_USER' (sudo, NOPASSWD, nix-users)"
+    echo "  - clone $REPO_URL to $REPO_DIR"
+    echo "  - Tailscale + ufw (allow ssh, trust tailscale0)"
+    echo "  - nix profile for '$AGENT_USER': opencode + toolchain"
+    echo "  - enable opencode.service (started by setup.sh)"
+    echo "  - hostname: agent-box"
     exit 0
 fi
 
-if is_nixos; then
-    phase2
-else
-    phase1
-fi
+check_prereqs
+confirm_install || {
+    echo "Aborted."
+    exit 0
+}
+
+ensure_base_pkgs
+ensure_nix
+ensure_agent_user
+ensure_repo
+ensure_tailscale
+ensure_firewall
+install_profile
+install_service
+print_next_steps

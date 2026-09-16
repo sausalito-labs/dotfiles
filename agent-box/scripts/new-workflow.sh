@@ -5,7 +5,7 @@ set -euo pipefail
 
 WORKFLOW_NAME="${1:-}"
 TEMPLATE_NAME="${2:-template}"
-WORKFLOWS_DIR="/etc/nixos/dotfiles/agent-box/workflows"
+WORKFLOWS_DIR="/opt/agent-box/agent-box/workflows"
 
 if [[ -z "$WORKFLOW_NAME" ]]; then
     echo "Usage: $0 <workflow-name> [template-name]" >&2
