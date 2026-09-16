@@ -28,7 +28,9 @@ Your OS and root access stay exactly as the provider configured them.
 
 `scripts/setup.sh` then collects secrets interactively (Tailscale auth key,
 OpenCode API key + web password, agent password), joins the tailnet, writes the
-OpenCode service secrets, and links `AGENTS.md` into OpenCode's system prompt.
+OpenCode service secrets, completes a GitHub device-flow login, links `AGENTS.md`
+into OpenCode's system prompt, and exposes the web UI over Tailscale Funnel as
+a public HTTPS URL (no client installs needed).
 
 The pre-made workflows are also templates:
 
@@ -60,18 +62,23 @@ bash /opt/agent-box/agent-box/scripts/setup.sh
 
 ## After setup
 
-- Log in as the agent user from the tailnet:
-  ```bash
-  ssh agent@agent-box
+The setup summary prints both addresses; the Funnel one needs no Tailscale on
+your device:
+
+- OpenCode web UI from any browser, anywhere (public HTTPS via Tailscale Funnel):
+  ```text
+  https://<node>.<tailnet>.ts.net     user: opencode / your OpenCode web UI password
   ```
-- OpenCode web UI:
-  ```bash
-  http://agent-box:4096
+- OpenCode web UI inside the tailnet (magicDNS):
+  ```text
+  http://<node>:4096
   ```
-- Authenticate GitHub with the website flow:
-  ```bash
-  gh auth login
-  ```
+- Log in via the tailnet: `ssh agent@<node>`
+
+GitHub CLI is already authenticated by setup (device flow). Re-run it if needed:
+```bash
+sudo -u agent gh auth login --hostname github.com --git-protocol https --web
+```
 
 ## Try → pin → commit
 

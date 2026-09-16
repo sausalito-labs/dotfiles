@@ -143,9 +143,19 @@ After upgrading either, restart the web service:
 
 ## Services
 
-- `opencode.service` — OpenCode web UI on port 4096 (tailnet only).
+- `opencode.service` — OpenCode web UI on port 4096, exposed two ways:
+  - tailnet (magicDNS): `http://<node>:4096`
+  - public HTTPS via Tailscale Funnel: `https://<node>.<tailnet>.ts.net`
+    (basic auth: user `opencode`, password from the setup run)
   Restart with: `systemctl restart opencode`
-- `tailscaled.service` — tailnet mesh.
+- `tailscaled.service` — tailnet mesh (Funnel traffic arrives through it).
+
+Manage the public Funnel exposure with:
+```bash
+tailscale funnel --bg 4096   # enable/persist the public HTTPS URL
+tailscale funnel off         # remove it
+tailscale funnel status      # show the current URL
+```
 
 ## Rules
 
@@ -154,4 +164,5 @@ After upgrading either, restart the web service:
 - Root SSH and OS access are managed by netcup; do not reconfigure sshd or root
   access unless asked.
 - SSH (port 22) is the only public port; everything else is firewalled.
-- OpenCode web UI runs on port 4096 inside the tailnet.
+- OpenCode web UI runs on port 4096, reachable via the tailnet and exposed
+  publicly through Tailscale Funnel as an HTTPS URL.

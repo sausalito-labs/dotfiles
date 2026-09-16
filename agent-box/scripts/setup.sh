@@ -15,7 +15,7 @@ if [[ "$EUID" -ne 0 ]]; then
 fi
 
 echo "============================================================"
-echo " NixOS Agent Box - First-Time Setup"
+echo " Agent Box - First-Time Setup"
 echo "============================================================"
 echo
 
@@ -60,6 +60,23 @@ chmod 600 /var/lib/opencode/opencode.env
 # -----------------------------------------------------------------------------
 /opt/agent-box/agent-box/scripts/setup-secrets.sh
 
+# -----------------------------------------------------------------------------
+# GitHub CLI (device flow: complete in any browser, from anywhere)
+# -----------------------------------------------------------------------------
+AGENT_PATH="$HOME_DIR/.nix-profile/bin:/nix/var/nix/profiles/default/bin:/usr/local/bin:/usr/bin:/bin"
+if ! sudo -u "$USER" env PATH="$AGENT_PATH" gh auth status &>/dev/null; then
+    echo
+    echo "==> GitHub login: a one-time code will be shown."
+    echo "    Open https://github.com/login/device on any device and enter it."
+    if ! sudo -u "$USER" env PATH="$AGENT_PATH" \
+        gh auth login --hostname github.com --git-protocol https --web; then
+        echo "    Warning: GitHub login skipped or failed. Run it later with:"
+        echo "    sudo -u agent gh auth login --hostname github.com --git-protocol https --web"
+    fi
+else
+    echo "==> GitHub CLI already authenticated."
+fi
+
 # Make sure the OpenCode service sees the new secrets.
 systemctl restart opencode
 
@@ -97,6 +114,19 @@ chown agent:agent /home/agent/.config/opencode/opencode.json
 echo "==> Wrote ~/.config/opencode/opencode.json"
 
 # -----------------------------------------------------------------------------
+# Tailscale Funnel: public HTTPS URL for the web UI (no client installs)
+# -----------------------------------------------------------------------------
+echo "==> Exposing the OpenCode web UI via Tailscale Funnel (public HTTPS)..."
+FUNNEL_URL=""
+if tailscale funnel --bg 4096; then
+    FUNNEL_URL="$(tailscale funnel status 2>/dev/null | awk '/^https:\/\//{print $1; exit}')"
+else
+    echo "    Warning: could not enable Funnel. Run it later with:"
+    echo "    sudo tailscale funnel --bg 4096"
+    echo "    (HTTPS must be enabled for the tailnet: https://login.tailscale.com/admin/dns)"
+fi
+
+# -----------------------------------------------------------------------------
 # Optional: Godot export templates
 # -----------------------------------------------------------------------------
 echo
@@ -115,9 +145,13 @@ echo
 echo "Services:"
 systemctl status opencode --no-pager 2>/dev/null | head -5
 echo
-echo "GitHub CLI is installed but not yet authenticated."
-echo "Log in via the website with:"
-echo "  sudo -u agent gh auth login"
-echo
-echo "Access from the tailnet:"
-echo "  OpenCode: http://agent-box:4096"
+NODE_NAME="$(tailscale status 2>/dev/null | awk 'NR==1{print $2}')"
+if [[ -n "$FUNNEL_URL" ]]; then
+    echo "OpenCode web UI (public, no install needed):"
+    echo "  $FUNNEL_URL"
+    echo "  user: opencode / your OpenCode web UI password"
+fi
+if [[ -n "$NODE_NAME" ]]; then
+    echo "OpenCode web UI (inside the tailnet):"
+    echo "  http://$NODE_NAME:4096"
+fi

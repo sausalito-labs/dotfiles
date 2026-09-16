@@ -293,12 +293,12 @@ EOF
 ============================================================
 
 No interactive terminal detected, so setup was skipped.
-Log in as root and run it manually:
+Log in as root and run it manually when ready:
 
   bash $AGENT_DIR/scripts/setup.sh
 
-OpenCode web UI (inside the tailnet):
-  http://agent-box:4096
+It will complete the GitHub login and print the OpenCode web UI
+URL (public HTTPS via Tailscale Funnel, plus the tailnet address).
 EOF
     fi
 }
