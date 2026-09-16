@@ -134,6 +134,34 @@ write_phase2_service() {
         done < <(grep -v '^#' /root/.ssh/authorized_keys 2>/dev/null || true)
     fi
 
+    # Never proceed into a box that will have no way in: if there is neither a
+    # usable password hash nor any authorized key, ask the operator to set a
+    # new root password right now (works from any device, no keys stored).
+    if [[ -z "$root_hash" && ${#root_keys[@]} -eq 0 ]]; then
+        if [[ -r /dev/tty ]]; then
+            local new_root=""
+            if ! read -rsp "No usable root password/keys found. Set one for your NixOS root: " new_root < /dev/tty; then
+                echo
+                echo "ERROR: no terminal available to set a root password." >&2
+                exit 1
+            fi
+            echo
+            if [[ -n "$new_root" ]]; then
+                root_hash="$(printf '%s' "$new_root" | openssl passwd -6 -stdin 2>/dev/null || true)"
+            fi
+            if [[ -z "$root_hash" ]]; then
+                echo "ERROR: could not generate a password hash (is openssl installed?)." >&2
+                echo "Set a root password with 'passwd root' and rerun the installer." >&2
+                exit 1
+            fi
+            echo "==> Will set a new root password on the NixOS box; log in with it after reboot."
+        else
+            echo "ERROR: No usable root password or SSH keys to preserve, and no terminal to ask for one." >&2
+            echo "Log into the box, run 'passwd root', then rerun the installer." >&2
+            exit 1
+        fi
+    fi
+
     if [[ -n "$root_hash" || ${#root_keys[@]} -gt 0 ]]; then
         root_cfg="  users.users.root = {"
         if [[ -n "$root_hash" ]]; then
@@ -163,6 +191,11 @@ write_phase2_service() {
   # The first-built NixOS system needs these for the phase 2 bootstrap:
   # curl fetches this installer at first boot, git clones the repo.
   environment.systemPackages = [ pkgs.curl pkgs.git ];
+
+  # NixOS defaults to "prohibit-password" for root, which would ignore the
+  # preserved password below and brick access on key-less boxes. Allow the
+  # baked password for login until phase 2 switches to the flake config.
+  services.openssh.settings.PermitRootLogin = "yes";
 
 $root_cfg
   systemd.services.agent-box-phase2 = {
