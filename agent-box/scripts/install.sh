@@ -271,24 +271,35 @@ install_service() {
     fi
 }
 
-print_next_steps() {
-    cat <<EOF
+run_setup() {
+    if [[ "$DRY_RUN" == "1" ]]; then
+        return
+    fi
+
+    if [[ -r /dev/tty ]]; then
+        cat <<EOF
+
+============================================================
+ Agent box install complete. Starting interactive setup.
+============================================================
+EOF
+        bash "$AGENT_DIR/scripts/setup.sh"
+    else
+        cat <<EOF
 
 ============================================================
  Agent box install complete.
 ============================================================
 
-Root SSH and the OS are untouched. Next:
+No interactive terminal detected, so setup was skipped.
+Log in as root and run it manually:
 
-  1. Run interactive setup (Tailscale, OpenCode, passwords):
-       bash $AGENT_DIR/scripts/setup.sh
+  bash $AGENT_DIR/scripts/setup.sh
 
-  2. Reconnect once setup restarts services:
-       ssh agent@$(get_ip)
-
-  OpenCode web UI (created by setup):
-       http://agent-box:4096   (inside the tailnet)
+OpenCode web UI (inside the tailnet):
+  http://agent-box:4096
 EOF
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -303,6 +314,7 @@ if [[ "$DRY_RUN" == "1" ]]; then
     echo "  - Tailscale + ufw (allow ssh, trust tailscale0)"
     echo "  - nix profile for '$AGENT_USER': opencode + toolchain"
     echo "  - enable opencode.service (started by setup.sh)"
+    echo "  - run interactive setup (setup.sh) when the install finishes"
     echo "  - hostname: agent-box"
     exit 0
 fi
@@ -321,4 +333,4 @@ ensure_tailscale
 ensure_firewall
 install_profile
 install_service
-print_next_steps
+run_setup

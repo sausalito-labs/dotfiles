@@ -42,18 +42,21 @@ The pre-made workflows are also templates:
    ```bash
    ssh root@<your-server-ip>
    ```
-2. Run the installer:
+2. Run the installer. It installs everything, then starts the interactive
+   setup (Tailscale, OpenCode, passwords) in the same session:
    ```bash
    curl -fsSL https://raw.githubusercontent.com/sausalito-labs/dotfiles/master/agent-box/scripts/install.sh | bash
    ```
    If you recently updated the installer, pass `-H 'Cache-Control: no-cache'`
    to avoid fetching a stale CDN-cached copy.
-3. Run the interactive setup:
-   ```bash
-   bash /opt/agent-box/agent-box/scripts/setup.sh
-   ```
 
-That's it — no reboot, no disk wipe, no root-ssh choreography.
+That's it — no reboot, no disk wipe, no root-ssh choreography. The interactive
+setup runs automatically when the install finishes. To rerun setup later (for
+example, to rotate secrets):
+
+```bash
+bash /opt/agent-box/agent-box/scripts/setup.sh
+```
 
 ## After setup
 
