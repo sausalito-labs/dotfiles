@@ -190,8 +190,10 @@ ensure_agent_user() {
         run usermod -aG nix-users "$AGENT_USER"
     fi
 
-    echo "$AGENT_USER ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/agent-box
-    chmod 440 /etc/sudoers.d/agent-box
+    # NOPASSWD is deliberately omitted — all box management (install, upgrade,
+    # service restart, firewall) runs as root via SSH. The agent's web shell
+    # stays unprivileged: `sudo` prompts for a password that a non-tty bash -c
+    # cannot answer, so this account cannot escalate to root from the web UI.
 
     # Login shells get the full toolchain PATH. The opencode.service unit sets
     # the same PATH for non-login shells (systemd / the agent's own shell), so
@@ -315,7 +317,7 @@ if [[ "$DRY_RUN" == "1" ]]; then
     echo "Plan: install multi-user Nix + agent box on this Debian/Ubuntu host."
     echo "  - base packages: curl, ufw"
     echo "  - Determinate Nix (multi-user, flakes enabled)"
-    echo "  - user '$AGENT_USER' (sudo, NOPASSWD, nix-users)"
+    echo "  - user '$AGENT_USER' (sudo, nix-users; no NOPASSWD — web shell stays unprivileged)"
     echo "  - fetch dotfiles (master tarball) to $REPO_DIR"
     echo "  - Tailscale + ufw (allow ssh, trust tailscale0)"
     echo "  - nix profile for '$AGENT_USER': toolchain"
