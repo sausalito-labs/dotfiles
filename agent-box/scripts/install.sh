@@ -227,6 +227,10 @@ ensure_repo() {
         step "Cloning repo to $REPO_DIR..."
         run git clone "$REPO_URL" "$REPO_DIR"
     fi
+
+    step "Giving '$AGENT_USER' ownership of the repo..."
+    run git config --system --add safe.directory "$REPO_DIR"
+    run chown -R "$AGENT_USER:$AGENT_USER" "$REPO_DIR"
 }
 
 ensure_tailscale() {
