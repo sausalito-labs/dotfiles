@@ -173,8 +173,8 @@ ensure_base_pkgs() {
 }
 
 ensure_nix() {
-    if [[ -x "$NIX_BIN" ]]; then
-        step "Nix already installed ($NIX_BIN)"
+    if [[ -x "$NIX_BIN" ]] || [[ -n "$(command -v nix)" ]]; then
+        step "Nix already installed"
         return
     fi
 
@@ -252,9 +252,11 @@ ensure_firewall() {
 install_profile() {
     step "Building and installing OpenCode + toolchain into '$AGENT_USER' Nix profile..."
     if [[ "$DRY_RUN" == "1" ]]; then
+        echo "    [dry-run] sudo -u agent git config --global --add safe.directory $REPO_DIR"
         echo "    [dry-run] sudo -u agent nix profile install $AGENT_DIR#opencode $AGENT_DIR#toolchain"
         return
     fi
+    sudo -u "$AGENT_USER" git config --global --add safe.directory "$REPO_DIR"
     sudo -u "$AGENT_USER" env \
         NIX_CONFIG="experimental-features = nix-command flakes" \
         "$NIX_BIN" profile install \
