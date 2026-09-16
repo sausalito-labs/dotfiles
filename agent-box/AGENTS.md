@@ -14,9 +14,16 @@ Installed into the `agent` user's Nix profile, so they are always on PATH:
 - `curl`, `unzip` — network and archive tools
 - `htop` — process viewer
 - `python3`, `openssl` — scripting and crypto utilities
-- `opencode` — this agent
 
-Add more with `nix profile install nixpkgs#<pkg>`, or by adding them to the
+`opencode` itself is **not** in the Nix profile. It is installed with the
+official installer at `/home/agent/.opencode/bin` (always the latest release,
+self-updating via `opencode upgrade`). To update it:
+
+```bash
+sudo -u agent opencode upgrade
+```
+
+Add more tools with `nix profile install nixpkgs#<pkg>`, or by adding them to the
 `toolchain` package in `./flake.nix` and reinstalling the profile.
 
 ## When asked to install a tool
@@ -111,7 +118,17 @@ on reinstall.
 Tool upgrades come from the pinned `nixpkgs` input in `./flake.nix`:
 - Change `flake.nix` (or bump the nixpkgs input), then:
   ```bash
-  sudo -u agent nix profile upgrade opencode toolchain
+  sudo -u agent nix profile upgrade toolchain
+  ```
+
+OpenCode is managed separately by its own installer and tracks the latest
+release:
+  ```bash
+  sudo -u agent opencode upgrade
+  ```
+
+After upgrading either, restart the web service:
+  ```bash
   systemctl restart opencode
   ```
 

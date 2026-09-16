@@ -4,8 +4,8 @@ Declarative tooling layered over plain Nix. Currently contains `agent-box`, a
 remote Linux server (VPS/VM) that runs OpenCode and Tailscale over Debian/Nix.
 
 - `agent-box/` — agent box configuration (OpenCode, Tailscale, SSH, workflows).
-  - `flake.nix` — `opencode` derivation + agent toolchain, pinned nixpkgs.
-  - `packages/opencode/` — OpenCode package (prebuilt x64 binary).
+  - `flake.nix` — agent toolchain buildEnv, pinned nixpkgs (OpenCode installs
+    via its official installer and tracks the latest release).
   - `services/opencode.service` — OpenCode web UI systemd unit (agent user).
   - `scripts/install.sh` — one-command installer for a fresh Debian/Ubuntu VPS.
   - `scripts/setup.sh` — interactive first-time setup.

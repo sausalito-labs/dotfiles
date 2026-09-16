@@ -22,9 +22,9 @@ OpenCode + per-project workflows on plain Nix, layered over Debian/Ubuntu.
 
 `scripts/install.sh` installs multi-user Nix (with Determinate Nix Installer),
 creates the `agent` user, installs Tailscale + a firewall (SSH + tailnet only),
-clones this repo to `/opt/agent-box`, and builds the agent profile
-(`opencode` + the base toolchain) via this flake. Your OS and root access stay
-exactly as the provider configured them.
+fetches this repo to `/opt/agent-box`, builds the base toolchain via this flake,
+and installs OpenCode with its official installer (latest release, self-updating).
+Your OS and root access stay exactly as the provider configured them.
 
 `scripts/setup.sh` then collects secrets interactively (Tailscale auth key,
 OpenCode API key + web password, agent password), joins the tailnet, writes the
@@ -119,8 +119,7 @@ curl ... | AUTO_YES=1 bash
 
 ## Structure
 
-- `flake.nix` — `packages.opencode` + `packages.toolchain` (pinned nixpkgs).
-- `packages/opencode/` — OpenCode derivation (prebuilt x64 binary).
+- `flake.nix` — `packages.toolchain` (pinned nixpkgs).
 - `services/opencode.service` — OpenCode web UI systemd unit (agent user).
 - `scripts/install.sh` — one-command Debian/Nix installer.
 - `scripts/setup.sh` — interactive first-time setup (Tailscale, OpenCode, passwords).

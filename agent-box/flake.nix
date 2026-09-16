@@ -1,5 +1,5 @@
 {
-  description = "Agent box: OpenCode + toolchain over plain Nix on Debian/Ubuntu";
+  description = "Agent box: toolchain over plain Nix on Debian/Ubuntu (OpenCode installs via its official installer)";
 
   inputs = {
     # Pin to the latest stable release for predictability.
@@ -9,14 +9,10 @@
   outputs = { self, nixpkgs }:
     let
       system = "x86_64-linux";
-      pkgs = import nixpkgs {
-        inherit system;
-        config.allowUnfree = true;
-      };
+      pkgs = import nixpkgs { inherit system; };
     in
     {
       packages.${system} = rec {
-        opencode = pkgs.callPackage ./packages/opencode/default.nix { };
         toolchain = pkgs.buildEnv {
           name = "agent-box-toolchain";
           paths = with pkgs; [
@@ -30,11 +26,11 @@
             openssl
           ];
         };
-        default = opencode;
+        default = toolchain;
       };
 
       devShells.${system}.default = pkgs.mkShell {
-        packages = [ self.packages.${system}.opencode ];
+        packages = [ self.packages.${system}.toolchain ];
       };
     };
 }

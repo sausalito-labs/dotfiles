@@ -194,7 +194,7 @@ ensure_agent_user() {
     chmod 440 /etc/sudoers.d/agent-box
 
     cat > /etc/profile.d/agent-box.sh <<'EOF'
-export PATH="$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"
+export PATH="$HOME/.opencode/bin:$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:$PATH"
 EOF
 
     step "Creating state directories..."
@@ -242,16 +242,25 @@ ensure_firewall() {
 }
 
 install_profile() {
-    step "Building and installing OpenCode + toolchain into '$AGENT_USER' Nix profile..."
+    step "Building and installing toolchain into '$AGENT_USER' Nix profile..."
     if [[ "$DRY_RUN" == "1" ]]; then
-        echo "    [dry-run] sudo -u agent nix profile install $AGENT_DIR#opencode $AGENT_DIR#toolchain"
+        echo "    [dry-run] sudo -u agent nix profile install $AGENT_DIR#toolchain"
         return
     fi
     sudo -u "$AGENT_USER" env \
         NIX_CONFIG="experimental-features = nix-command flakes" \
         "$NIX_BIN" profile install \
-        "$AGENT_DIR#opencode" \
         "$AGENT_DIR#toolchain"
+}
+
+install_opencode() {
+    step "Installing OpenCode via the official installer (tracking latest)..."
+    if [[ "$DRY_RUN" == "1" ]]; then
+        echo "    [dry-run] sudo -u agent env HOME=/home/agent bash -c 'curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path'"
+        return
+    fi
+    sudo -u "$AGENT_USER" env HOME="$AGENT_HOME" bash -c \
+        'curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path'
 }
 
 install_service() {
@@ -304,7 +313,8 @@ if [[ "$DRY_RUN" == "1" ]]; then
     echo "  - user '$AGENT_USER' (sudo, NOPASSWD, nix-users)"
     echo "  - fetch dotfiles (master tarball) to $REPO_DIR"
     echo "  - Tailscale + ufw (allow ssh, trust tailscale0)"
-    echo "  - nix profile for '$AGENT_USER': opencode + toolchain"
+    echo "  - nix profile for '$AGENT_USER': toolchain"
+    echo "  - opencode (official installer, latest) to /home/agent/.opencode/bin"
     echo "  - enable opencode.service (started by setup.sh)"
     echo "  - run interactive setup (setup.sh) when the install finishes"
     echo "  - hostname: agent-box"
@@ -324,5 +334,6 @@ ensure_repo
 ensure_tailscale
 ensure_firewall
 install_profile
+install_opencode
 install_service
 run_setup
