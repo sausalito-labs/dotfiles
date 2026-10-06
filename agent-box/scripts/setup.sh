@@ -70,6 +70,10 @@ echo "==> Creating the workspace at $HOME_DIR/projects..."
 mkdir -p "$HOME_DIR/projects"
 chown "$USER:$USER" "$HOME_DIR/projects"
 
+# Stop any running instance first: Claude Code rewrites ~/.claude.json during a
+# session, so don't touch it while the service holds it.
+systemctl stop claude-remote-control 2>/dev/null || true
+
 # -----------------------------------------------------------------------------
 # Claude Code login (Remote Control requires a claude.ai subscription login;
 # API keys and setup-token do NOT work for Remote Control)
@@ -117,10 +121,36 @@ if [[ -f /opt/agent-box/agent-box/AGENTS.md ]]; then
 fi
 
 # -----------------------------------------------------------------------------
-# Start the Remote Control service
+# Start the Remote Control service, then verify it actually came up.
+#
+# A service blocked on the workspace trust prompt still reports "active", so an
+# is-active check alone isn't enough: also scan the journal for the trust banner
+# Claude prints when a folder is untrusted.
 # -----------------------------------------------------------------------------
 echo "==> Starting Claude Code Remote Control service..."
 systemctl enable --now claude-remote-control
+sleep 5
+
+if ! systemctl is-active --quiet claude-remote-control; then
+    echo
+    echo "!! claude-remote-control is NOT running. Recent log:"
+    journalctl -u claude-remote-control --no-pager -n 20
+    echo
+    echo "   Do not assume the box is ready."
+elif journalctl -u claude-remote-control --no-pager -n 60 2>/dev/null \
+        | grep -q 'Quick safety check'; then
+    echo
+    echo "!! The service is stuck on the workspace trust prompt for"
+    echo "   $HOME_DIR/projects, which systemd cannot answer. Trust it once:"
+    echo
+    echo "     systemctl stop claude-remote-control"
+    echo "     sudo -u agent env HOME=$HOME_DIR PATH=$AGENT_PATH \\"
+    echo "       script -qefc 'cd $HOME_DIR/projects && $CLAUDE_BIN' /dev/null </dev/tty"
+    echo "     # accept the trust dialog, then /exit"
+    echo "     systemctl start claude-remote-control"
+else
+    echo "==> Service is up and past the trust step."
+fi
 
 # -----------------------------------------------------------------------------
 # Optional: Godot export templates
