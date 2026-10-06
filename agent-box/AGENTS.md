@@ -167,6 +167,31 @@ After upgrading either, restart the service:
   ports. Restart with: `systemctl restart claude-remote-control`
 - `tailscaled.service` — tailnet mesh (used for SSH/MagicDNS admin access).
 
+## Exposing local services (Tailscale Serve/Funnel)
+
+The `agent` user is the Tailscale operator, so it can run `tailscale serve` and
+`tailscale funnel` without `sudo`:
+
+```bash
+tailscale serve --bg 3000      # reachable inside the tailnet only
+tailscale funnel --bg 3000     # reachable on the public internet
+tailscale serve status
+tailscale funnel status
+tailscale serve reset          # clear serve/funnel config
+```
+
+Funnel notes:
+
+- Funnel must be enabled for the tailnet in the admin console (DNS -> HTTPS
+  certificates, then Funnel). The first use prints a one-time approval link.
+- Funnel only allows ports 443, 8443, and 10000; use `tailscale serve` for
+  anything else (tailnet-only).
+- Anything funnelled is on the public internet. Don't funnel services that
+  should stay private.
+- The operator setting is re-applied by setup because `tailscale up` resets
+  unspecified flags. As operator you can also serve/funnel, but not restart
+  `tailscaled` or change other root-only settings.
+
 ## Rules
 
 - Do **not** install global packages with `nix-env` or edit system files unless

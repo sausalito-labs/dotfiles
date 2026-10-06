@@ -31,10 +31,15 @@ source "$SECRETS_FILE"
 # -----------------------------------------------------------------------------
 if ! tailscale status &>/dev/null; then
     echo "==> Joining Tailscale..."
-    tailscale up --authkey "${TAILSCALE_AUTHKEY}"
+    tailscale up --authkey "${TAILSCALE_AUTHKEY}" --operator="${USER}"
 else
     echo "==> Tailscale already connected."
 fi
+
+# Let the agent user run `tailscale serve` / `tailscale funnel` without sudo.
+# Re-applied every run because `tailscale up` resets unspecified flags.
+echo "==> Setting the Tailscale operator to '${USER}'..."
+tailscale set --operator="${USER}"
 
 # -----------------------------------------------------------------------------
 # 2. GitHub CLI

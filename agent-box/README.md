@@ -99,6 +99,18 @@ GitHub CLI is already authenticated by setup (device flow). Re-run it if needed:
 sudo -u agent gh auth login --hostname github.com --git-protocol https --web
 ```
 
+### Exposing services over Tailscale
+
+The `agent` user is the Tailscale operator, so it can publish local services
+without `sudo`:
+
+```bash
+tailscale serve --bg 3000     # tailnet-only
+tailscale funnel --bg 3000    # public HTTPS (Funnel must be enabled; ports 443/8443/10000)
+```
+
+See `AGENTS.md` for details and caveats.
+
 ### Keeping the login alive
 
 Remote Control uses your claude.ai subscription login, stored in
