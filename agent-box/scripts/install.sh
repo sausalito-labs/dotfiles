@@ -264,8 +264,9 @@ install_claude() {
         echo "    [dry-run] sudo -u agent env HOME=/home/agent bash -c 'curl -fsSL https://claude.ai/install.sh | bash'"
         return
     fi
-    sudo -u "$AGENT_USER" env HOME="$AGENT_HOME" bash -c \
-        'curl -fsSL https://claude.ai/install.sh | bash'
+    sudo -u "$AGENT_USER" env HOME="$AGENT_HOME" \
+        PATH="$AGENT_HOME/.local/bin:$AGENT_HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:/usr/local/bin:/usr/bin:/bin" \
+        bash -c 'curl -fsSL https://claude.ai/install.sh | bash'
 }
 
 install_service() {

@@ -64,6 +64,13 @@ else
 fi
 
 # -----------------------------------------------------------------------------
+# Workspace (create it before Remote Control, which trusts and serves it)
+# -----------------------------------------------------------------------------
+echo "==> Creating the workspace at $HOME_DIR/projects..."
+mkdir -p "$HOME_DIR/projects"
+chown "$USER:$USER" "$HOME_DIR/projects"
+
+# -----------------------------------------------------------------------------
 # Claude Code login (Remote Control requires a claude.ai subscription login;
 # API keys and setup-token do NOT work for Remote Control)
 # -----------------------------------------------------------------------------
@@ -93,7 +100,7 @@ if [[ -r /dev/tty ]]; then
     echo "    Answer 'y' if asked, then press Ctrl+C to stop. setup will then start"
     echo "    the service in the background."
     script -qefc \
-        "sudo -u $USER env HOME=$HOME_DIR PATH=$AGENT_PATH $CLAUDE_BIN remote-control --name agent-box --spawn same-dir" \
+        "sudo -u $USER env HOME=$HOME_DIR PATH=$AGENT_PATH sh -c 'cd $HOME_DIR/projects && exec $CLAUDE_BIN remote-control --name agent-box --spawn same-dir'" \
         /dev/null </dev/tty || true
 fi
 
@@ -108,13 +115,6 @@ if [[ -f /opt/agent-box/agent-box/AGENTS.md ]]; then
     chown -R agent:agent /home/agent/.claude
     echo "==> Linked agent-box instructions to ~/.claude/CLAUDE.md"
 fi
-
-# -----------------------------------------------------------------------------
-# Workspace
-# -----------------------------------------------------------------------------
-echo "==> Creating the workspace at $HOME_DIR/projects..."
-mkdir -p "$HOME_DIR/projects"
-chown "$USER:$USER" "$HOME_DIR/projects"
 
 # -----------------------------------------------------------------------------
 # Start the Remote Control service
