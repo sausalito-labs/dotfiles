@@ -21,6 +21,9 @@
             packages = with pkgs; [
               godot_4
               godot_4-export-templates
+              # Character modelling/rigging (4.2 LTS; MPFB2 needs >= 4.2).
+              # Runs headless (`blender -b`) for scripted builds and renders.
+              blender
               python3
               unzip
               curl
