@@ -3,7 +3,7 @@
 You are running on the **agent box**, a Debian host with multi-user Nix layered
 on top. The operating system (sshd, root access, host provisioning) is managed
 by the provider (netcup); this repo manages only the per-user Nix environment,
-the OpenCode web service, and per-project workflows.
+the Claude Code Remote Control service, and per-project workflows.
 
 ## Base system tools
 
@@ -15,12 +15,12 @@ Installed into the `agent` user's Nix profile, so they are always on PATH:
 - `htop` — process viewer
 - `python3`, `openssl` — scripting and crypto utilities
 
-`opencode` itself is **not** in the Nix profile. It is installed with the
-official installer at `/home/agent/.opencode/bin` (always the latest release,
-self-updating via `opencode upgrade`). To update it:
+`claude` itself is **not** in the Nix profile. It is installed with the official
+installer at `/home/agent/.local/bin` (always the latest release, self-updating
+in the background). To update it:
 
 ```bash
-sudo -u agent opencode upgrade
+sudo -u agent claude update
 ```
 
 Add more tools with `nix profile install nixpkgs#<pkg>`, or by adding them to the
@@ -28,13 +28,15 @@ Add more tools with `nix profile install nixpkgs#<pkg>`, or by adding them to th
 
 The toolchain and Nix are on PATH everywhere, login shell or not:
 - login shells get it from `/etc/profile.d/agent-box.sh`;
-- the `opencode.service` unit sets the same PATH for non-login shells —
+- the `claude-remote-control.service` unit sets the same PATH for non-login
+  shells —
   systemd contexts and the agent's own shell (`bash -c` never reads
   `/etc/profile`).
 
 `git`, `gh`, `nix`, `enter-workflow.sh` etc. therefore resolve from any
-session the box provides. After a toolchain upgrade, restart `opencode`
-(`systemctl restart opencode`) so the unit's PATH reflects the new profile.
+session the box provides. After a toolchain upgrade, restart the service
+(`systemctl restart claude-remote-control`) so the unit's PATH reflects the new
+profile.
 
 ## When asked to install a tool
 
@@ -137,15 +139,15 @@ Tool upgrades come from the pinned `nixpkgs` input in `./flake.nix`:
   sudo -u agent nix profile upgrade toolchain
   ```
 
-OpenCode is managed separately by its own installer and tracks the latest
+Claude Code is managed separately by its own installer and tracks the latest
 release:
   ```bash
-  sudo -u agent opencode upgrade
+  sudo -u agent claude update
   ```
 
-After upgrading either, restart the web service:
+After upgrading either, restart the service:
   ```bash
-  systemctl restart opencode
+  systemctl restart claude-remote-control
   ```
 
 ## Important paths
@@ -153,27 +155,17 @@ After upgrading either, restart the web service:
 - `/opt/agent-box/` — this repo (clone of the dotfiles repo)
 - `/opt/agent-box/agent-box/` — the agent box config, packages, scripts
 - `/opt/agent-box/agent-box/workflows/` — workflows and templates
-- `/home/agent/projects/` — default workspace for project repos (the web
-  UI starts here; pick the folder for the repo you're working in)
-- `/home/agent/.config/opencode/AGENTS.md` — this file
-- `/var/lib/opencode/opencode.env` — OpenCode web UI secrets
-- `/var/lib/agent-setup/secrets.env` — Tailscale/OpenCode API secrets
+- `/home/agent/projects/` — default workspace for project repos (the Remote
+  Control service starts sessions in this directory)
+- `/home/agent/.claude/CLAUDE.md` — this file (symlink to the repo's AGENTS.md)
+- `/var/lib/agent-setup/secrets.env` — Tailscale secrets
 
 ## Services
 
-- `opencode.service` — OpenCode web UI on port 4096, exposed two ways:
-  - tailnet (magicDNS): `http://<node>:4096`
-  - public HTTPS via Tailscale Funnel: `https://<node>.<tailnet>.ts.net`
-    (basic auth: user `opencode`, password from the setup run)
-  Restart with: `systemctl restart opencode`
-- `tailscaled.service` — tailnet mesh (Funnel traffic arrives through it).
-
-Manage the public Funnel exposure with:
-```bash
-tailscale funnel --bg 4096   # enable/persist the public HTTPS URL
-tailscale funnel off         # remove it
-tailscale funnel status      # show the current URL
-```
+- `claude-remote-control.service` — Claude Code Remote Control. Runs Claude Code
+  on the box, driven from claude.ai/code or the Claude app; opens no inbound
+  ports. Restart with: `systemctl restart claude-remote-control`
+- `tailscaled.service` — tailnet mesh (used for SSH/MagicDNS admin access).
 
 ## Rules
 
@@ -182,5 +174,7 @@ tailscale funnel status      # show the current URL
 - Root SSH and OS access are managed by netcup; do not reconfigure sshd or root
   access unless asked.
 - SSH (port 22) is the only public port; everything else is firewalled.
-- OpenCode web UI runs on port 4096, reachable via the tailnet and exposed
-  publicly through Tailscale Funnel as an HTTPS URL.
+- Claude Code Remote Control opens no inbound ports; it makes outbound HTTPS to
+  api.anthropic.com and is reached through claude.ai/code or the Claude app.
+- Remote Control requires a claude.ai subscription login (not an API key) and
+  stores the session transcript on Anthropic's servers.

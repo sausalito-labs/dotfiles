@@ -1,0 +1,26 @@
+[Unit]
+Description=Claude Code Remote Control
+After=network-online.target tailscaled.service
+Wants=network-online.target tailscaled.service
+
+[Service]
+Type=simple
+User=agent
+Group=agent
+WorkingDirectory=/home/agent/projects
+# Remote Control runs Claude Code locally and is driven from claude.ai/code or
+# the Claude app; it opens no inbound ports. It needs a PTY for its one-time
+# confirmation and workspace-trust checks, so wrap it with script(1); keeping the
+# real claude process in the foreground lets systemd's Restart= supervise it.
+ExecStart=/usr/bin/script -qefc '/home/agent/.local/bin/claude remote-control --name agent-box --spawn same-dir' /dev/null
+Restart=always
+RestartSec=5
+Environment=HOME=/home/agent
+Environment="PATH=/home/agent/.local/bin:/home/agent/.nix-profile/bin:/nix/var/nix/profiles/default/bin:/opt/agent-box/agent-box/scripts:/usr/local/bin:/usr/bin:/bin"
+# Remote Control requires subscription auth against api.anthropic.com. Any of
+# these overrides breaks it, so make sure the service never inherits them.
+UnsetEnvironment=ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL CLAUDE_CODE_OAUTH_TOKEN
+UnsetEnvironment=CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC DISABLE_GROWTHBOOK
+
+[Install]
+WantedBy=multi-user.target

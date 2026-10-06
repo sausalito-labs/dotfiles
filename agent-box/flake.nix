@@ -1,5 +1,5 @@
 {
-  description = "Agent box: toolchain over plain Nix on Debian/Ubuntu (OpenCode installs via its official installer)";
+  description = "Agent box: toolchain over plain Nix on Debian/Ubuntu (Claude Code installs via its official installer)";
 
   inputs = {
     # Pin to the latest stable release for predictability.

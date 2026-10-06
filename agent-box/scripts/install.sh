@@ -102,7 +102,7 @@ check_prereqs() {
     fi
 
     if [[ "$(uname -m)" != "x86_64" ]]; then
-        echo "ERROR: x86_64-linux is required (opencode ships a linux-x64 binary)." >&2
+        echo "ERROR: x86_64-linux is required (Claude Code ships a linux-x64 binary)." >&2
         echo "Detected: $(uname -m)" >&2
         exit 1
     fi
@@ -139,7 +139,8 @@ confirm_install() {
 
 This installs Nix and the agent box on $(hostname) ($(get_ip)).
 It will add the '$AGENT_USER' user, install Nix, Tailscale, a firewall,
-and run the OpenCode web service. Your OS and root access are untouched.
+and run the Claude Code Remote Control service. Your OS and root access are
+untouched.
 
 EOF
     local answer=""
@@ -191,26 +192,23 @@ ensure_agent_user() {
     fi
 
     # NOPASSWD is deliberately omitted — all box management (install, upgrade,
-    # service restart, firewall) runs as root via SSH. The agent's web shell
-    # stays unprivileged: `sudo` prompts for a password that a non-tty bash -c
-    # cannot answer, so this account cannot escalate to root from the web UI.
+    # service restart, firewall) runs as root via SSH. The agent's Remote
+    # Control session stays unprivileged: `sudo` prompts for a password that a
+    # non-tty bash -c cannot answer, so the account cannot escalate to root.
 
-    # Login shells get the full toolchain PATH. The opencode.service unit sets
-    # the same PATH for non-login shells (systemd / the agent's own shell), so
-    # no symlink hackery in /usr/local/bin is needed anywhere.
+    # Login shells get the full toolchain PATH. The claude-remote-control.service
+    # unit sets the same PATH for non-login shells (systemd / the agent's own
+    # shell), so no symlink hackery in /usr/local/bin is needed anywhere.
     cat > /etc/profile.d/agent-box.sh <<'EOF'
-export PATH="$HOME/.opencode/bin:$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:/opt/agent-box/agent-box/scripts:$PATH"
+export PATH="$HOME/.local/bin:$HOME/.nix-profile/bin:/nix/var/nix/profiles/default/bin:/opt/agent-box/agent-box/scripts:$PATH"
 EOF
 
     step "Creating state directories..."
     run mkdir -p "$AGENT_HOME/projects" \
-        "$AGENT_HOME/.config/opencode" \
-        "$AGENT_HOME/.local/share/opencode" \
-        "$AGENT_HOME/.local/share/godot/export_templates" \
-        /var/lib/opencode
+        "$AGENT_HOME/.claude" \
+        "$AGENT_HOME/.local/share/godot/export_templates"
     run chown -R "$AGENT_USER:$AGENT_USER" "$AGENT_HOME/projects" \
-        "$AGENT_HOME/.config" "$AGENT_HOME/.local"
-    run chown "$AGENT_USER:$AGENT_USER" /var/lib/opencode
+        "$AGENT_HOME/.claude" "$AGENT_HOME/.local"
 }
 
 ensure_repo() {
@@ -260,22 +258,26 @@ install_profile() {
         "$AGENT_DIR#toolchain"
 }
 
-install_opencode() {
-    step "Installing OpenCode via the official installer (tracking latest)..."
+install_claude() {
+    step "Installing Claude Code via the official installer (tracking latest)..."
     if [[ "$DRY_RUN" == "1" ]]; then
-        echo "    [dry-run] sudo -u agent env HOME=/home/agent bash -c 'curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path'"
+        echo "    [dry-run] sudo -u agent env HOME=/home/agent bash -c 'curl -fsSL https://claude.ai/install.sh | bash'"
         return
     fi
     sudo -u "$AGENT_USER" env HOME="$AGENT_HOME" bash -c \
-        'curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path'
+        'curl -fsSL https://claude.ai/install.sh | bash'
 }
 
 install_service() {
-    step "Installing OpenCode systemd service..."
+    step "Installing Claude Code Remote Control systemd service..."
     if [[ "$DRY_RUN" != "1" ]]; then
-        install -m 644 "$AGENT_DIR/services/opencode.service" /etc/systemd/system/opencode.service
+        # Replace any previous OpenCode unit on this box.
+        systemctl disable --now opencode.service 2>/dev/null || true
+        rm -f /etc/systemd/system/opencode.service
+        install -m 644 "$AGENT_DIR/services/claude-remote-control.service" \
+            /etc/systemd/system/claude-remote-control.service
         systemctl daemon-reload
-        systemctl enable opencode
+        systemctl enable claude-remote-control
     fi
 }
 
@@ -304,8 +306,8 @@ Log in as root and run it manually when ready:
 
   bash $AGENT_DIR/scripts/setup.sh
 
-It will complete the GitHub login and print the OpenCode web UI
-URL (public HTTPS via Tailscale Funnel, plus the tailnet address).
+It will complete the GitHub login, sign Claude Code in (subscription),
+and print how to reach the session from claude.ai/code or the Claude app.
 EOF
     fi
 }
@@ -317,13 +319,13 @@ if [[ "$DRY_RUN" == "1" ]]; then
     echo "Plan: install multi-user Nix + agent box on this Debian/Ubuntu host."
     echo "  - base packages: curl, ufw"
     echo "  - Determinate Nix (multi-user, flakes enabled)"
-    echo "  - user '$AGENT_USER' (sudo, nix-users; no NOPASSWD — web shell stays unprivileged)"
+    echo "  - user '$AGENT_USER' (sudo, nix-users; no NOPASSWD — stays unprivileged)"
     echo "  - fetch dotfiles (master tarball) to $REPO_DIR"
     echo "  - Tailscale + ufw (allow ssh, trust tailscale0)"
     echo "  - nix profile for '$AGENT_USER': toolchain"
-    echo "  - opencode (official installer, latest) to /home/agent/.opencode/bin"
-    echo "  - toolchain PATH in login shells (/etc/profile.d) and the opencode unit"
-    echo "  - enable opencode.service (started by setup.sh)"
+    echo "  - claude (official installer, latest) to /home/agent/.local/bin"
+    echo "  - toolchain PATH in login shells (/etc/profile.d) and the claude-remote-control unit"
+    echo "  - enable claude-remote-control.service (started by setup.sh)"
     echo "  - run interactive setup (setup.sh) when the install finishes"
     echo "  - hostname: agent-box"
     exit 0
@@ -342,6 +344,6 @@ ensure_repo
 ensure_tailscale
 ensure_firewall
 install_profile
-install_opencode
+install_claude
 install_service
 run_setup

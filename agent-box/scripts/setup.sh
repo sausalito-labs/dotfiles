@@ -8,6 +8,8 @@ USER="agent"
 HOME_DIR="/home/agent"
 SECRETS_DIR="/var/lib/agent-setup"
 SECRETS_FILE="$SECRETS_DIR/secrets.env"
+CLAUDE_BIN="$HOME_DIR/.local/bin/claude"
+AGENT_PATH="$HOME_DIR/.local/bin:$HOME_DIR/.nix-profile/bin:/nix/var/nix/profiles/default/bin:/opt/agent-box/agent-box/scripts:/usr/local/bin:/usr/bin:/bin"
 
 if [[ "$EUID" -ne 0 ]]; then
     echo "ERROR: Run this script as root (e.g., sudo /opt/agent-box/agent-box/scripts/setup.sh)" >&2
@@ -24,10 +26,6 @@ echo
 # -----------------------------------------------------------------------------
 read -rsp "Tailscale auth key: " TAILSCALE_AUTHKEY </dev/tty
 echo
-read -rsp "OpenCode API key: " OPENCODE_API_KEY </dev/tty
-echo
-read -rsp "OpenCode web UI password: " OPENCODE_PASSWORD </dev/tty
-echo
 read -rsp "Set password for user '$USER': " AGENT_PASSWORD </dev/tty
 echo
 
@@ -36,7 +34,6 @@ chmod 700 "$SECRETS_DIR"
 
 cat > "$SECRETS_FILE" <<EOF
 TAILSCALE_AUTHKEY=${TAILSCALE_AUTHKEY}
-OPENCODE_API_KEY=${OPENCODE_API_KEY}
 EOF
 chmod 600 "$SECRETS_DIR/secrets.env"
 
@@ -46,24 +43,13 @@ chmod 600 "$SECRETS_DIR/secrets.env"
 echo "$USER:$AGENT_PASSWORD" | chpasswd
 
 # -----------------------------------------------------------------------------
-# Set OpenCode web password
-# -----------------------------------------------------------------------------
-mkdir -p /var/lib/opencode
-chown agent:agent /var/lib/opencode
-cat > /var/lib/opencode/opencode.env <<EOF
-OPENCODE_SERVER_PASSWORD=${OPENCODE_PASSWORD}
-EOF
-chmod 600 /var/lib/opencode/opencode.env
-
-# -----------------------------------------------------------------------------
-# Run the automated auth setup
+# Run the automated auth setup (Tailscale, GitHub)
 # -----------------------------------------------------------------------------
 /opt/agent-box/agent-box/scripts/setup-secrets.sh
 
 # -----------------------------------------------------------------------------
 # GitHub CLI (device flow: complete in any browser, from anywhere)
 # -----------------------------------------------------------------------------
-AGENT_PATH="$HOME_DIR/.nix-profile/bin:/nix/var/nix/profiles/default/bin:/usr/local/bin:/usr/bin:/bin"
 if ! sudo -u "$USER" env PATH="$AGENT_PATH" gh auth status &>/dev/null; then
     echo
     echo "==> GitHub login: a one-time code will be shown."
@@ -77,41 +63,51 @@ else
     echo "==> GitHub CLI already authenticated."
 fi
 
-# Make sure the OpenCode service sees the new secrets.
-systemctl restart opencode
+# -----------------------------------------------------------------------------
+# Claude Code login (Remote Control requires a claude.ai subscription login;
+# API keys and setup-token do NOT work for Remote Control)
+# -----------------------------------------------------------------------------
+echo
+echo "==> Claude Code login (claude.ai subscription)"
+if sudo -u "$USER" env HOME="$HOME_DIR" PATH="$AGENT_PATH" \
+    "$CLAUDE_BIN" auth status &>/dev/null; then
+    echo "==> Claude Code already authenticated."
+else
+    echo "    A browser URL and code will appear. Open the URL on any device and"
+    echo "    paste the code back here (this SSH session has no local browser)."
+    if ! script -qefc \
+        "sudo -u $USER env HOME=$HOME_DIR PATH=$AGENT_PATH $CLAUDE_BIN auth login" \
+        /dev/null </dev/tty; then
+        echo "    Warning: Claude login skipped or failed. Run it later as agent:"
+        echo "      sudo -u agent env HOME=/home/agent $CLAUDE_BIN auth login"
+    fi
+fi
 
 # -----------------------------------------------------------------------------
-# Inject agent instructions into OpenCode
+# Accept Remote Control's one-time confirmation and workspace trust so the
+# headless service can start. Start it once interactively, then Ctrl+C.
 # -----------------------------------------------------------------------------
-mkdir -p /home/agent/.config/opencode
+if [[ -r /dev/tty ]]; then
+    echo
+    echo "==> Enabling Remote Control"
+    echo "    Answer 'y' if asked, then press Ctrl+C to stop. setup will then start"
+    echo "    the service in the background."
+    script -qefc \
+        "sudo -u $USER env HOME=$HOME_DIR PATH=$AGENT_PATH $CLAUDE_BIN remote-control --name agent-box --spawn same-dir" \
+        /dev/null </dev/tty || true
+fi
+
+# -----------------------------------------------------------------------------
+# Inject agent instructions into Claude Code
+# -----------------------------------------------------------------------------
+mkdir -p /home/agent/.claude
 if [[ -f /opt/agent-box/agent-box/AGENTS.md ]]; then
-    # AGENT_BOX contains the agent-box specific rules. It is loaded via
-    # opencode.json so the clean AGENTS.md stays free for custom prompts.
-    ln -sf /opt/agent-box/agent-box/AGENTS.md /home/agent/.config/opencode/AGENT_BOX
-    chown -R agent:agent /home/agent/.config/opencode
-    echo "==> Linked agent-box instructions to ~/.config/opencode/AGENT_BOX"
+    # Claude Code reads ~/.claude/CLAUDE.md as user-level memory. Symlink the
+    # repo's AGENTS.md so the box instructions follow the repo.
+    ln -sf /opt/agent-box/agent-box/AGENTS.md /home/agent/.claude/CLAUDE.md
+    chown -R agent:agent /home/agent/.claude
+    echo "==> Linked agent-box instructions to ~/.claude/CLAUDE.md"
 fi
-
-# Create a clean AGENTS.md for custom system prompts if one does not exist.
-if [[ ! -f /home/agent/.config/opencode/AGENTS.md ]]; then
-    cat > /home/agent/.config/opencode/AGENTS.md <<'EOF'
-# System Prompts
-
-Add custom system prompts here.
-EOF
-    chown agent:agent /home/agent/.config/opencode/AGENTS.md
-    echo "==> Created clean ~/.config/opencode/AGENTS.md"
-fi
-
-# Load AGENT_BOX as an instruction file. Combined with AGENTS.md by OpenCode.
-cat > /home/agent/.config/opencode/opencode.json <<'EOF'
-{
-  "$schema": "https://opencode.ai/config.json",
-  "instructions": ["/home/agent/.config/opencode/AGENT_BOX"]
-}
-EOF
-chown agent:agent /home/agent/.config/opencode/opencode.json
-echo "==> Wrote ~/.config/opencode/opencode.json"
 
 # -----------------------------------------------------------------------------
 # Workspace
@@ -121,23 +117,10 @@ mkdir -p "$HOME_DIR/projects"
 chown "$USER:$USER" "$HOME_DIR/projects"
 
 # -----------------------------------------------------------------------------
-# Tailscale Funnel: public HTTPS URL for the web UI (no client installs)
+# Start the Remote Control service
 # -----------------------------------------------------------------------------
-echo "==> Exposing the OpenCode web UI via Tailscale Funnel (public HTTPS)..."
-FUNNEL_URL=""
-FUNNEL_ENABLE_URL=""
-if FUNNEL_OUTPUT="$(tailscale funnel --bg 4096 2>&1)"; then
-    echo "$FUNNEL_OUTPUT"
-    FUNNEL_ENABLE_URL="$(printf '%s\n' "$FUNNEL_OUTPUT" \
-        | grep -oE 'https://login\.tailscale\.com/f/funnel\?\S+' | head -1 || true)"
-    FUNNEL_URL="$(tailscale funnel status 2>/dev/null \
-        | grep -oE 'https://[^ ]+\.ts\.net' | head -1 || true)"
-else
-    echo "$FUNNEL_OUTPUT"
-    echo "    Warning: could not enable Funnel. Run it later with:"
-    echo "    sudo tailscale funnel --bg 4096"
-    echo "    (HTTPS must be enabled for the tailnet: https://login.tailscale.com/admin/dns)"
-fi
+echo "==> Starting Claude Code Remote Control service..."
+systemctl enable --now claude-remote-control
 
 # -----------------------------------------------------------------------------
 # Optional: Godot export templates
@@ -155,26 +138,21 @@ echo "============================================================"
 echo "Tailscale status:"
 tailscale status 2>/dev/null || true
 echo
-echo "Services:"
-systemctl status opencode --no-pager 2>/dev/null | head -5
+echo "Service:"
+systemctl status claude-remote-control --no-pager 2>/dev/null | head -5
 echo
 NODE_NAME="$(tailscale status 2>/dev/null | awk 'NR==1{print $2}')"
-echo
 echo "Workspace (~/projects):"
-echo "  /home/agent/projects  (create repos here, pick the folder in the web UI)"
+echo "  /home/agent/projects  (clone repos here; the session starts in this dir)"
 echo
-if [[ -n "$FUNNEL_ENABLE_URL" ]]; then
-    echo "IMPORTANT: Funnel needs a one-time tailnet approval. Open this link:"
-    echo "  $FUNNEL_ENABLE_URL"
-    echo "  Then reload the web UI below (cert takes ~30-60s to issue)."
+echo "Reach Claude Code from any device:"
+echo "  1. Open https://claude.ai/code (or the Claude app, Code tab)"
+echo "  2. Open the session named 'agent-box'"
+echo
+if [[ -n "$NODE_NAME" ]]; then
+    echo "Admin over the tailnet:  ssh agent@$NODE_NAME"
     echo
 fi
-if [[ -n "$FUNNEL_URL" ]]; then
-    echo "OpenCode web UI (public, no install needed):"
-    echo "  $FUNNEL_URL"
-    echo "  user: opencode / your OpenCode web UI password"
-fi
-if [[ -n "$NODE_NAME" ]]; then
-    echo "OpenCode web UI (inside the tailnet):"
-    echo "  http://$NODE_NAME:4096"
-fi
+echo "Note: Remote Control uses your claude.ai subscription login, and it stores"
+echo "      the session transcript on Anthropic's servers. If the login expires,"
+echo "      sessions stop until you SSH in, run 'claude', and use /login."

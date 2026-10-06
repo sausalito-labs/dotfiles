@@ -4,11 +4,12 @@
 # Create /var/lib/agent-setup/secrets.env with:
 #
 #   TAILSCALE_AUTHKEY=tskey-auth-...
-#   OPENCODE_API_KEY=sk-...
 #
 # Then run this script as root.
 #
-# GitHub authentication is done separately with `gh auth login`.
+# GitHub authentication is done separately with `gh auth login`. Claude Code
+# authentication is done separately with `claude auth login` (Remote Control
+# requires a claude.ai subscription login, not an API key).
 
 set -euo pipefail
 
@@ -18,7 +19,7 @@ HOME_DIR="/home/agent"
 
 if [[ ! -f "$SECRETS_FILE" ]]; then
     echo "ERROR: Secrets file not found at $SECRETS_FILE" >&2
-    echo "Create it with TAILSCALE_AUTHKEY and OPENCODE_API_KEY." >&2
+    echo "Create it with TAILSCALE_AUTHKEY." >&2
     exit 1
 fi
 
@@ -47,27 +48,10 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# 3. OpenCode
+# 3. Claude Code
 # -----------------------------------------------------------------------------
-
-OPENCODE_AUTH_DIR="$HOME_DIR/.local/share/opencode"
-OPENCODE_AUTH_FILE="$OPENCODE_AUTH_DIR/auth.json"
-
-if [[ ! -f "$OPENCODE_AUTH_FILE" ]]; then
-    echo "==> Writing OpenCode auth file..."
-    mkdir -p "$OPENCODE_AUTH_DIR"
-    cat > "$OPENCODE_AUTH_FILE" <<EOF
-{
-  "opencode-go": {
-    "type": "api",
-    "key": "${OPENCODE_API_KEY}"
-  }
-}
-EOF
-    chown -R "$USER:$USER" "$OPENCODE_AUTH_DIR"
-    chmod 600 "$OPENCODE_AUTH_FILE"
-else
-    echo "==> OpenCode auth file already exists."
-fi
+# No secret to write: Claude Code authenticates with `claude auth login` and
+# stores the credential in ~/.claude/.credentials.json (mode 0600). setup.sh
+# runs that login step.
 
 echo "==> Auth setup complete."
